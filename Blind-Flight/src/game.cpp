@@ -325,7 +325,8 @@ static void buildRankPool() {
 
 static void buildRevealMapFromRank() {
     revealMapCount = 0;
-    for (int r = 0; r < session.pourCount; r++) {
+    // Reverse order: last place revealed first, building to 1st place
+    for (int r = session.pourCount - 1; r >= 0; r--) {
         int g = session.rankOrder[r];
         if (g <= 0) continue;
         for (int p = 0; p < session.pourCount; p++) {
@@ -1119,7 +1120,9 @@ static void drawReveal(bool fullRedraw) {
     // --- Rank or pour number below the name ---
     int metaY;
     if (currentMode == GAME_MODE_RANK) {
-        uiDrawCenteredText(ordinalRevealStr(idx), CONTENT_Y + 80, FONT_SMALL, COL_DIM);
+        // revealMap is reversed: idx 0 = last place, so map back to rank
+        int rank = revealMapCount - 1 - idx;
+        uiDrawCenteredText(ordinalRevealStr(rank), CONTENT_Y + 80, FONT_SMALL, COL_DIM);
         metaY = CONTENT_Y + 95;
     } else {
         char pourLabel[16];
@@ -1186,23 +1189,33 @@ static void drawDone(bool fullRedraw) {
     int leftX = 16;
 
     if (currentMode == GAME_MODE_RANK) {
-        for (int i = 0; i < revealMapCount; i++) {
+        // Results in rank order (1st to last): revealMap is reversed,
+        // so iterate backwards to show #1 first
+        for (int i = revealMapCount - 1; i >= 0; i--) {
+            int rank    = revealMapCount - i;  // 1-based rank
             int glass   = revealMap[i].glass;
             int pourIdx = revealMap[i].pourIdx;
             const char* name = session.glassName[pourIdx][0] ? session.glassName[pourIdx] : "?";
 
-            char line[40];
-            snprintf(line, sizeof(line), "#%d Glass %d - %s", i + 1, glass, name);
-
-            tft->setTextColor(COL_ACCENT, COL_BG);
+            // Rank number in dim color
+            char rankStr[8];
+            snprintf(rankStr, sizeof(rankStr), "#%d ", rank);
             tft->setTextSize(FONT_BODY);
-            int lineMaxW = SCREEN_W - leftX * 2;
             tft->setTextDatum(ML_DATUM);
-            if (tft->textWidth(line) > lineMaxW) {
+            tft->setTextColor(COL_DIM, COL_BG);
+            tft->drawString(rankStr, leftX, y + 10);
+            int rankW = tft->textWidth(rankStr);
+
+            // Glass number and name in accent color
+            char glassName[40];
+            snprintf(glassName, sizeof(glassName), "%d. %s", glass, name);
+            int lineMaxW = SCREEN_W - leftX - 16 - rankW;
+            tft->setTextColor(COL_ACCENT, COL_BG);
+            if (tft->textWidth(glassName) > lineMaxW) {
                 char truncBuf[40];
                 int maxChars = 0;
-                for (int c = 0; line[c] && c < 36; c++) {
-                    truncBuf[c] = line[c];
+                for (int c = 0; glassName[c] && c < 36; c++) {
+                    truncBuf[c] = glassName[c];
                     truncBuf[c + 1] = '\0';
                     if (tft->textWidth(truncBuf) > lineMaxW - tft->textWidth("..")) break;
                     maxChars = c + 1;
@@ -1210,9 +1223,9 @@ static void drawDone(bool fullRedraw) {
                 truncBuf[maxChars] = '.';
                 truncBuf[maxChars + 1] = '.';
                 truncBuf[maxChars + 2] = '\0';
-                tft->drawString(truncBuf, leftX, y + 10);
+                tft->drawString(truncBuf, leftX + rankW, y + 10);
             } else {
-                tft->drawString(line, leftX, y + 10);
+                tft->drawString(glassName, leftX + rankW, y + 10);
             }
             y += 28;
         }

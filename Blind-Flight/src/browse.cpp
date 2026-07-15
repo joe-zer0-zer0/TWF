@@ -55,8 +55,8 @@ static void buildLevel() {
 
     switch (browseLevel) {
         case 0:
-            browseLabels[browseCount++] = "-- Manual Entry --";
-            browseLabels[browseCount++] = "-- Favorites --";
+            browseLabels[browseCount++] = "- Manual Entry -";
+            browseLabels[browseCount++] = "- Favorites -";
             for (int i = 0; i < WHISKEY_TYPE_COUNT && browseCount < BROWSE_MAX_ITEMS; i++) {
                 browseLabels[browseCount++] = WHISKEY_TYPES[i].name;
             }

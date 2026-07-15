@@ -664,7 +664,7 @@ static void aboutDraw(bool fullRedraw) {
         tft->setTextSize(FONT_BODY);
         tft->setTextDatum(ML_DATUM);
         tft->setTextColor(COL_TEXT, COL_BG);
-        tft->drawString("Blind Flight", labelX, startY);
+        tft->drawString("Firmware", labelX, startY);
 
         tft->setTextDatum(MR_DATUM);
         tft->setTextColor(COL_ACCENT, COL_BG);
@@ -676,7 +676,7 @@ static void aboutDraw(bool fullRedraw) {
         int y = startY + lineH;
         tft->setTextDatum(ML_DATUM);
         tft->setTextColor(COL_TEXT, COL_BG);
-        tft->drawString("Battery", labelX, y);
+        tft->drawString("Batt", labelX, y);
 
         y += lineH;
         tft->drawString("Wi-Fi", labelX, y);
