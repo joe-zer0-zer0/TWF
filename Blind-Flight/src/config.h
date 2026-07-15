@@ -138,6 +138,6 @@
 #define NVS_NS_WIFI             "bfwifi"
 
 // --- OTA firmware updates ---
-#define OTA_MANIFEST_URL    "https://raw.githubusercontent.com/jcargile/blind-flight/main/release/version.json"
+#define OTA_MANIFEST_URL    "https://raw.githubusercontent.com/joe-zer0-zer0/TWF/master/release/version.json"
 #define OTA_CHECK_TIMEOUT   10000       // ms for manifest fetch
 #define OTA_DOWNLOAD_TIMEOUT 120000     // ms for binary download
