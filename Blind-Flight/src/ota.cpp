@@ -88,9 +88,8 @@ bool otaCheckForUpdate(const char* manifestUrl, OtaUpdateInfo& info,
 
     HTTPClient http;
     http.setTimeout(OTA_CHECK_TIMEOUT);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
-    // Skip TLS certificate verification — we verify the binary
-    // via SHA-256 hash in the manifest instead.
     http.begin(manifestUrl);
     int httpCode = http.GET();
 
@@ -146,6 +145,7 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
                       char* errMsg, int errMsgLen) {
     HTTPClient http;
     http.setTimeout(OTA_DOWNLOAD_TIMEOUT);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
     http.begin(binaryUrl);
     int httpCode = http.GET();
