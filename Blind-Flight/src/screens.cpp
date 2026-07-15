@@ -4,7 +4,11 @@
 #include "motor.h"
 #include "input.h"
 #include "game.h"
+#include "h2h.h"
+#include "palate_training.h"
 #include "settings.h"
+#include "battery.h"
+#include "persist.h"
 
 // ============================================================
 // Shared state between screens
@@ -14,87 +18,104 @@
 static ScrollList menuList;
 static const int MENU_COUNT = 5;
 static const char* menuLabels[MENU_COUNT] = {
-    "Basic Flight",
+    "Quick Flight",
     "Full Flight",
-    "Best Guess",
     "Ranked Flight",
-    "Settings"
-};
-static const char* menuSessionNotes[MENU_COUNT] = {
-    "Session 10",
-    "Session 12",
-    "Session 13",
-    "Session 20",
-    "Session 17"
+    "Palate Training",
+    "Head to Head"
 };
 
 // Detail screen — set by menu before pushing
 static const char* detailTitle = "";
 static const char* detailNote = "";
 
-// List demo — 24 items to exercise scrolling
-static ScrollList demoList;
-static const int DEMO_COUNT = 24;
-static const char* demoLabels[DEMO_COUNT] = {
-    "Bourbon",
-    "Rye Whiskey",
-    "Scotch Single Malt",
-    "Scotch Blend",
-    "Irish Whiskey",
-    "Japanese Whisky",
-    "Canadian Whisky",
-    "Tennessee Whiskey",
-    "Corn Whiskey",
-    "Wheat Whiskey",
-    "Malt Whiskey",
-    "Pot Still Whiskey",
-    "Blended Malt",
-    "Cask Strength",
-    "Single Barrel",
-    "Small Batch",
-    "Bottled in Bond",
-    "Peated",
-    "Sherried",
-    "Port Finish",
-    "Rum Cask",
-    "Wine Cask",
-    "Double Barrel",
-    "Infinity Bottle"
-};
-
 // ============================================================
 // HOME SCREEN
 // ============================================================
 
-static void homeDraw(bool fullRedraw) {
-    if (!fullRedraw) return;
+static unsigned long homeLastBattRefresh = 0;
 
+static void homeDrawBattery() {
     TFT_eSPI* tft = uiGetTFT();
-    tft->fillScreen(COL_BG);
+    int pct = batteryGetPercent();
 
-    uiDrawTitleBar("BLIND FLIGHT", COL_ACCENT);
+    int bw = 24, bh = 14;      // body
+    int tw = 3, th = 6;        // terminal nub
 
-    // Decorative glass position indicators
-    int y = 90;
-    int boxW = 44;
-    int boxH = 44;
-    int gap = 10;
-    int totalW = 4 * boxW + 3 * gap;
-    int startX = (SCREEN_W - totalW) / 2;
+    // Color by tier
+    uint16_t col = COL_SELECTED;
+    if (batteryIsLockout())     col = COL_ERROR;
+    else if (batteryIsLow())    col = COL_MOVING;
 
-    for (int i = 0; i < NUM_GLASSES; i++) {
-        int x = startX + i * (boxW + gap);
-        tft->fillRoundRect(x, y, boxW, boxH, 6, COL_DIM);
-        tft->setTextColor(COL_TEXT, COL_DIM);
-        tft->setTextSize(3);
-        tft->setTextDatum(MC_DATUM);
-        tft->drawString(String(i + 1), x + boxW / 2, y + boxH / 2);
+    // Centered below hint text
+    int totalW = bw + tw + 4 + 30; // glyph + gap + percent text
+    int bx = (SCREEN_W - totalW) / 2;
+    int by = 210;
+
+    // Clear the battery area
+    tft->fillRect(bx - 4, by - 2, totalW + 8, bh + 4, COL_BG);
+
+    // Battery outline
+    tft->drawRect(bx, by, bw, bh, col);
+    // Terminal nub
+    tft->fillRect(bx + bw, by + (bh - th) / 2, tw, th, col);
+    // Fill proportional to percent
+    int fillW = (bw - 4) * pct / 100;
+    if (fillW > 0) {
+        tft->fillRect(bx + 2, by + 2, fillW, bh - 4, col);
     }
 
-    uiDrawCenteredText("Ready", 160, FONT_BODY, COL_SELECTED);
-    uiDrawHint("Press MENU to begin", 190);
+    // Percent text right of glyph
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%d%%", pct);
+    tft->setTextColor(col, COL_BG);
+    tft->setTextSize(FONT_SMALL);
+    tft->setTextDatum(ML_DATUM);
+    tft->drawString(buf, bx + bw + tw + 4, by + bh / 2);
+}
 
-    uiDrawSoftButtons("HOME", "MENU");
+static void homeDraw(bool fullRedraw) {
+    TFT_eSPI* tft = uiGetTFT();
+
+    if (fullRedraw) {
+        tft->fillScreen(COL_BG);
+        uiDrawTitleBar("BLIND FLIGHT", COL_ACCENT);
+
+        // Decorative glass position indicators
+        int y = 90;
+        int boxW = 44, boxH = 44, gap = 10;
+        int totalW = 4 * boxW + 3 * gap;
+        int startX = (SCREEN_W - totalW) / 2;
+
+        for (int i = 0; i < NUM_GLASSES; i++) {
+            int x = startX + i * (boxW + gap);
+            tft->fillRoundRect(x, y, boxW, boxH, 6, COL_DIM);
+            tft->setTextColor(COL_TEXT, COL_DIM);
+            tft->setTextSize(3);
+            tft->setTextDatum(MC_DATUM);
+            tft->drawString(String(i + 1), x + boxW / 2, y + boxH / 2);
+        }
+
+        uiDrawCenteredText("Ready", 160, FONT_BODY, COL_SELECTED);
+
+        if (batteryIsLow()) {
+            uiDrawCenteredText("Battery Low", 185, FONT_BODY, COL_MOVING);
+        } else {
+            uiDrawHint("Press MENU to begin", 190);
+        }
+
+        homeDrawBattery();
+
+        uiDrawSoftButtons("SETTINGS", "MENU");
+        homeLastBattRefresh = millis();
+        return;
+    }
+
+    // Partial redraw: refresh battery indicator every 10s
+    if (millis() - homeLastBattRefresh >= 10000) {
+        homeLastBattRefresh = millis();
+        homeDrawBattery();
+    }
 }
 
 static void homeInput(InputEvent evt) {
@@ -107,8 +128,7 @@ static void homeInput(InputEvent evt) {
 
         case INPUT_BTN_LEFT:
             audioPlayTone(TONE_SELECT);
-            runHomingSequence();
-            uiRequestRedraw();
+            uiPushScreenT(&screenSettings, TRANS_WIPE_LEFT);
             break;
 
         default:
@@ -150,7 +170,6 @@ static void menuInput(InputEvent evt) {
     int sel = uiScrollListHandleInput(&menuList, evt);
 
     if (sel >= 0) {
-        // Item selected
         audioPlayTone(TONE_CONFIRM);
 
         if (sel == 0) {
@@ -160,18 +179,12 @@ static void menuInput(InputEvent evt) {
             gameSetMode(GAME_MODE_NAMED);
             uiPushScreen(&screenGame);
         } else if (sel == 2) {
-            gameSetMode(GAME_MODE_GUESS);
-            uiPushScreen(&screenGame);
-        } else if (sel == 3) {
             gameSetMode(GAME_MODE_RANK);
             uiPushScreen(&screenGame);
+        } else if (sel == 3) {
+            uiPushScreen(&screenPalateTraining);
         } else if (sel == 4) {
-            uiPushScreenT(&screenSettings, TRANS_WIPE_LEFT);
-        } else {
-            // Other modes — push detail placeholder
-            detailTitle = menuLabels[sel];
-            detailNote = menuSessionNotes[sel];
-            uiPushScreen(&screenDetail);
+            uiPushScreen(&screenH2H);
         }
         return;
     }
@@ -241,59 +254,6 @@ const Screen screenDetail = {
     detailDraw,
     detailInput,
     nullptr
-};
-
-// ============================================================
-// LIST DEMO SCREEN (Session 6)
-// ============================================================
-// 24-item scrollable list of whiskey categories.
-// Selecting an item pushes the detail screen showing the
-// selected item name. Exercises the full ScrollList API:
-// scrolling, scroll bar, selection, and clamping.
-// ============================================================
-
-static void listDemoDraw(bool fullRedraw) {
-    if (!fullRedraw) return;
-
-    TFT_eSPI* tft = uiGetTFT();
-    tft->fillScreen(COL_BG);
-
-    uiDrawTitleBar("WHISKEY TYPES", COL_ACCENT);
-    uiScrollListDraw(&demoList);
-    uiDrawSoftButtons("BACK", "SELECT");
-}
-
-static void listDemoOnEnter() {
-    uiScrollListInit(&demoList, demoLabels, DEMO_COUNT);
-}
-
-static void listDemoInput(InputEvent evt) {
-    int sel = uiScrollListHandleInput(&demoList, evt);
-
-    if (sel >= 0) {
-        audioPlayTone(TONE_CONFIRM);
-        detailTitle = demoLabels[sel];
-        detailNote = "Selected!";
-        uiPushScreen(&screenDetail);
-        return;
-    }
-
-    switch (evt) {
-        case INPUT_BTN_LEFT:
-            audioPlayTone(TONE_SELECT);
-            uiPopScreen();
-            break;
-
-        default:
-            break;
-    }
-}
-
-const Screen screenListDemo = {
-    "ListDemo",
-    listDemoDraw,
-    listDemoInput,
-    listDemoOnEnter
 };
 
 // ============================================================

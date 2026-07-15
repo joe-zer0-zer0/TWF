@@ -37,10 +37,22 @@ uint8_t  settingsGetSpinSpeed();   // 0=Fast, 1=Normal, 2=Theatrical
 void     settingsSetSpinSpeed(uint8_t v);
 uint8_t  settingsGetPourSide();    // 0=Front, 1=Right, 2=Rear, 3=Left
 void     settingsSetPourSide(uint8_t v);
+int16_t  settingsGetHomeOffset();  // microstep trim added to POUR_OFFSET
+void     settingsSetHomeOffset(int16_t v);
 
-// --- Battery ---
-float    settingsReadBatteryV();   // Live ADC read, software-averaged
-int      settingsBatteryPercent(); // 0–100 mapped from voltage range
+// --- Glass count ---
+uint8_t  settingsGetGlassCount();  // 2–4 (default 4)
+void     settingsSetGlassCount(uint8_t v);
+
+// --- Display timeout ---
+uint16_t settingsGetDimDelay();    // seconds (default 120)
+void     settingsSetDimDelay(uint16_t v);
+uint16_t settingsGetOffDelay();    // seconds (default 600)
+void     settingsSetOffDelay(uint16_t v);
+
+// --- Battery (wrappers — real logic in battery module) ---
+float    settingsReadBatteryV();
+int      settingsBatteryPercent();
 
 // --- Lookup tables (public for modules that need the raw values) ---
 extern const uint8_t BRIGHT_MAP[5];    // level 0–4 → backlight PWM 0–255

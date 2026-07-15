@@ -224,13 +224,19 @@ void transSlotRoll(int x, int y, int w, int h,
                    int fontSize) {
     if (!tft) return;
 
-    // Create a sprite sized to the bounding rect
+    // Measure text width and cap sprite to what's needed (saves heap)
+    tft->setTextSize(fontSize);
+    int textW = tft->textWidth(text) + 8;
+    int sprW = (textW < w) ? textW : w;
+    if (sprW < 40) sprW = 40;
+    int sprX = x + (w - sprW) / 2;
+
+    // Clear the full bounding rect first
+    tft->fillRect(x, y, w, h, bgColor);
+
     TFT_eSprite spr(tft);
-    spr.createSprite(w, h);
+    spr.createSprite(sprW, h);
     if (!spr.created()) {
-        // Fallback: just draw the text directly (no animation)
-        Serial.println("[Trans] SlotRoll: sprite alloc failed, drawing static");
-        tft->fillRect(x, y, w, h, bgColor);
         tft->setTextColor(fgColor, bgColor);
         tft->setTextSize(fontSize);
         tft->setTextDatum(MC_DATUM);
@@ -242,88 +248,27 @@ void transSlotRoll(int x, int y, int w, int h,
     spr.setTextSize(fontSize);
     spr.setTextDatum(MC_DATUM);
 
-    int centerX = w / 2;
+    int centerX = sprW / 2;
     int centerY = h / 2;
 
-    // Animate: text starts offset downward and decelerates to center.
-    // Use ease-out (quadratic): offset = maxOffset * (1 - t)^2
     for (int frame = 0; frame <= TRANS_SLOT_FRAMES; frame++) {
-        float t = (float)frame / TRANS_SLOT_FRAMES;     // 0.0 → 1.0
-        float ease = (1.0f - t) * (1.0f - t);            // ease-out quadratic
-        int offset = (int)(TRANS_SLOT_MAX_OFFSET * ease); // pixels below center
+        float t = (float)frame / TRANS_SLOT_FRAMES;
+        float ease = (1.0f - t) * (1.0f - t);
+        int offset = (int)(TRANS_SLOT_MAX_OFFSET * ease);
 
         spr.fillSprite(bgColor);
         spr.drawString(text, centerX, centerY + offset);
-        spr.pushSprite(x, y);
+        spr.pushSprite(sprX, y);
 
-        // Adaptive delay: faster at start, slower near end (enhances decel feel)
         int delayMs = 8 + (int)(30.0f * t * t);
         busyWait(delayMs);
+        yield();
     }
 
-    // Final frame: ensure text is exactly centered
     spr.fillSprite(bgColor);
     spr.drawString(text, centerX, centerY);
-    spr.pushSprite(x, y);
+    spr.pushSprite(sprX, y);
 
     spr.deleteSprite();
 }
 
-// ============================================================
-// Spin indicator
-// ============================================================
-// Draws a short arc that rotates around a center point.
-// Each call erases the previous arc and draws the next one.
-// The arc spans ARC_SWEEP degrees. Call in a timed loop
-// (e.g., every 30–50ms) for smooth rotation.
-// ============================================================
-
-#define ARC_SWEEP       60      // degrees of visible arc
-#define ARC_STEP        15      // degrees to advance per call
-
-// Internal: draw an arc segment on the TFT
-// Angles in degrees, 0 = top, clockwise.
-static void drawArcSegment(int cx, int cy, int r, int thickness,
-                           int startAngle, int endAngle,
-                           uint16_t color) {
-    // Convert to radians and draw pixel-by-pixel
-    // Simple approach: step through angles, draw filled circles at each point
-    float startRad = (startAngle - 90) * DEG_TO_RAD;   // -90 so 0° = top
-    float endRad   = (endAngle - 90) * DEG_TO_RAD;
-
-    // Step in 2° increments for smoothness vs. speed balance
-    float stepRad = 2.0f * DEG_TO_RAD;
-    for (float a = startRad; a <= endRad; a += stepRad) {
-        int px = cx + (int)(r * cos(a));
-        int py = cy + (int)(r * sin(a));
-        tft->fillCircle(px, py, thickness / 2, color);
-    }
-}
-
-void transSpinStep(int cx, int cy,
-                   uint16_t color, uint16_t bgColor,
-                   int* angle) {
-    if (!tft) return;
-
-    // Erase previous arc
-    int prevStart = *angle;
-    int prevEnd   = prevStart + ARC_SWEEP;
-    drawArcSegment(cx, cy, TRANS_SPIN_RADIUS, TRANS_SPIN_THICKNESS,
-                   prevStart, prevEnd, bgColor);
-
-    // Advance angle
-    *angle = (*angle + ARC_STEP) % 360;
-
-    // Draw new arc
-    int newStart = *angle;
-    int newEnd   = newStart + ARC_SWEEP;
-    drawArcSegment(cx, cy, TRANS_SPIN_RADIUS, TRANS_SPIN_THICKNESS,
-                   newStart, newEnd, color);
-}
-
-void transSpinClear(int cx, int cy, uint16_t bgColor) {
-    if (!tft) return;
-    // Clear the full circle area the spin indicator occupies
-    int outer = TRANS_SPIN_RADIUS + TRANS_SPIN_THICKNESS / 2 + 1;
-    tft->fillCircle(cx, cy, outer, bgColor);
-}

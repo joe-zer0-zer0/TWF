@@ -1,0 +1,2393 @@
+diff --git b/Blind-Flight/src/browse.cpp a/Blind-Flight/src/browse.cpp
+index 1d7a838..5298ccd 100644
+--- b/Blind-Flight/src/browse.cpp
++++ a/Blind-Flight/src/browse.cpp
+@@ -18,7 +18,6 @@ static int browseLevel;          // 0=types, 1=distilleries, 2=products
+ static int selectedType;         // index into WHISKEY_TYPES[]
+ static int selectedDist;         // index into distilleries[]
+ static const char* resultName;   // selected name, or nullptr
+-static const LibraryEntry* resultEntry;  // library entry, or nullptr (Session 21)
+ 
+ // Manual entry via TextEntry (Session 12 revision)
+ static bool textEntryMode = false;
+@@ -75,7 +74,7 @@ static void buildLevel() {
+             const WhiskeyDistillery& wd =
+                 WHISKEY_TYPES[selectedType].distilleries[selectedDist];
+             for (int i = 0; i < wd.productCount && i < BROWSE_MAX_ITEMS; i++) {
+-                browseLabels[i] = wd.products[i].name;
++                browseLabels[i] = wd.products[i];
+                 browseCount++;
+             }
+             break;
+@@ -108,7 +107,6 @@ void browseReset() {
+     selectedType   = 0;
+     selectedDist   = 0;
+     resultName     = nullptr;
+-    resultEntry    = nullptr;
+     textEntryMode  = false;
+     favPromptMode  = false;
+ }
+@@ -117,22 +115,6 @@ const char* browseGetResult() {
+     return resultName;
+ }
+ 
+-const LibraryEntry* browseGetEntry() {
+-    return resultEntry;
+-}
+-
+-static void selectProduct(int idx) {
+-    const WhiskeyDistillery& wd =
+-        WHISKEY_TYPES[selectedType].distilleries[selectedDist];
+-    resultName  = wd.products[idx].name;
+-    resultEntry = &wd.products[idx];
+-}
+-
+-static void selectNonProduct(const char* name) {
+-    resultName  = name;
+-    resultEntry = nullptr;
+-}
+-
+ // ============================================================
+ // Screen callbacks
+ // ============================================================
+@@ -189,13 +171,13 @@ static void browseInput(InputEvent evt) {
+             favoritesAdd(manualNameBuf);
+             audioPlayTone(TONE_CONFIRM);
+             favPromptMode = false;
+-            selectNonProduct(manualNameBuf);
++            resultName = manualNameBuf;
+             uiPopScreen();
+         } else if (evt == INPUT_BTN_LEFT || evt == INPUT_ENC_CLICK) {
+             // Don't save, just use the name
+             audioPlayTone(TONE_SELECT);
+             favPromptMode = false;
+-            selectNonProduct(manualNameBuf);
++            resultName = manualNameBuf;
+             uiPopScreen();
+         }
+         return;
+@@ -218,7 +200,7 @@ static void browseInput(InputEvent evt) {
+                 favPromptMode = true;
+                 uiRequestRedraw();
+             } else {
+-                selectNonProduct(manualNameBuf);
++                resultName = manualNameBuf;
+                 uiPopScreen();
+             }
+         } else if (result == -1) {
+@@ -265,7 +247,7 @@ static void browseInput(InputEvent evt) {
+             // Favorites list — select a favorite
+             if (favoritesGetCount() == 0) return;
+             audioPlayTone(TONE_CONFIRM);
+-            selectNonProduct(browseLabels[sel]);
++            resultName = browseLabels[sel];
+             uiPopScreen();
+             return;
+         }
+@@ -280,7 +262,7 @@ static void browseInput(InputEvent evt) {
+         else {
+             // Product level — encoder click selects
+             audioPlayTone(TONE_CONFIRM);
+-            selectProduct(sel);
++            resultName = browseLabels[sel];
+             uiPopScreen();
+             return;
+         }
+@@ -308,16 +290,12 @@ static void browseInput(InputEvent evt) {
+         if (browseLevel == 10) {
+             if (favoritesGetCount() == 0) return;
+             audioPlayTone(TONE_CONFIRM);
+-            selectNonProduct(browseLabels[idx]);
++            resultName = browseLabels[idx];
+             uiPopScreen();
+             return;
+         }
+         audioPlayTone(TONE_CONFIRM);
+-        if (browseLevel == 2) {
+-            selectProduct(idx);
+-        } else {
+-            selectNonProduct(browseLabels[idx]);
+-        }
++        resultName = browseLabels[idx];
+         uiPopScreen();
+         return;
+     }
+@@ -335,8 +313,7 @@ static void browseInput(InputEvent evt) {
+             buildLevel();
+             uiRequestRedraw();
+         } else {
+-            resultName  = nullptr;
+-            resultEntry = nullptr;
++            resultName = nullptr;
+             uiPopScreen();
+         }
+         return;
+diff --git b/Blind-Flight/src/browse.h a/Blind-Flight/src/browse.h
+index bed2252..90f321b 100644
+--- b/Blind-Flight/src/browse.h
++++ a/Blind-Flight/src/browse.h
+@@ -1,7 +1,7 @@
+ #pragma once
+ 
+ // ============================================================
+-// Blind Flight — Browse Screen (Session 12, updated Session 21)
++// Blind Flight — Browse Screen (Session 12)
+ // ============================================================
+ // Three-level hierarchical browser for the whiskey library:
+ //   Level 0: Whiskey Types
+@@ -17,20 +17,14 @@
+ // available via browseGetResult(). A nullptr result means
+ // the user backed out without selecting.
+ //
+-// Session 21: browseGetEntry() returns a pointer to the
+-// LibraryEntry when the user selected at product level.
+-// Returns nullptr for type/distillery/manual/favorites.
+-//
+ // Usage:
+ //   browseReset();                 // clear previous result
+ //   uiPushScreen(&screenBrowse);   // launch the browser
+ //   // ... later, after it pops back:
+ //   const char* name = browseGetResult();
+-//   const LibraryEntry* entry = browseGetEntry();  // may be nullptr
+ // ============================================================
+ 
+ #include "ui.h"
+-#include "categories.h"
+ 
+ // --- The browse screen ---
+ extern const Screen screenBrowse;
+@@ -41,8 +35,3 @@ void browseReset();
+ // Get the selected name after the screen pops.
+ // Returns nullptr if the user cancelled/backed out.
+ const char* browseGetResult();
+-
+-// Get the LibraryEntry for the selection (Session 21).
+-// Non-null only when user selected at product level from the library.
+-// nullptr for type-level, distillery-level, manual entry, or favorites.
+-const LibraryEntry* browseGetEntry();
+diff --git b/Blind-Flight/src/categories.cpp a/Blind-Flight/src/categories.cpp
+index 643c762..8271458 100644
+--- b/Blind-Flight/src/categories.cpp
++++ a/Blind-Flight/src/categories.cpp
+@@ -1,259 +1,157 @@
+ #include "categories.h"
+ 
+ // ============================================================
+-// Blind Flight — Whiskey Category Data (Session 12, updated Session 21)
++// Blind Flight — Whiskey Category Data (Session 12)
+ // ============================================================
+ // ~120 distilleries, ~650+ products across 9 whiskey types.
+ // All rye products consolidated under American Rye.
+-//
+-// Session 21: Converted product arrays from const char* to
+-// LibraryEntry structs with proof, price tier, and age metadata.
+-// Metadata populated for well-known products; unknowns use 0.
+-// Price tiers: 1=$ (<$30), 2=$$ ($30-60), 3=$$$ ($60-120), 4=$$$$ ($120+)
+ // ============================================================
+ 
+ // ============================================================
+ // BOURBON
+ // ============================================================
+ 
+-static const LibraryEntry p_bbn_buffalo_trace[] = {
+-    {"Buffalo Trace",        90,  1, 0},
+-    {"Eagle Rare 10yr",      90,  2, 10},
+-    {"Blanton's Original",   93,  3, 0},
+-    {"W.L. Weller Special",  90,  2, 0},
+-    {"W.L. Weller 107",     107,  2, 0},
+-    {"W.L. Weller 12yr",     90,  3, 12},
+-    {"E.H. Taylor SmB",     100,  2, 0},
+-    {"E.H. Taylor SiB",     100,  3, 0},
+-    {"Stagg Jr",              0,  3, 0},
+-    {"Elmer T. Lee SiB",     90,  2, 0},
+-    {"Benchmark No. 8",      80,  1, 0},
+-};
+-static const LibraryEntry p_bbn_heaven_hill[] = {
+-    {"Elijah Craig SmB",     94,  2, 0},
+-    {"Elijah Craig BP",       0,  3, 0},
+-    {"Elijah Craig Toasted", 94,  2, 0},
+-    {"Evan Williams Black",  86,  1, 0},
+-    {"Evan Williams BiB",   100,  1, 0},
+-    {"Evan Williams 1783",   86,  1, 0},
+-    {"Evan Williams SiB",    87,  2, 0},
+-    {"Larceny SmB",          92,  1, 0},
+-    {"Larceny BP",            0,  3, 0},
+-    {"Henry McKenna 10yr",  100,  2, 10},
+-    {"Old Fitzgerald BiB",  100,  3, 0},
+-    {"Fighting Cock",       103,  1, 0},
+-    {"Heaven Hill BiB",     100,  1, 0},
+-};
+-static const LibraryEntry p_bbn_jim_beam[] = {
+-    {"Jim Beam White",       80,  1, 0},
+-    {"Jim Beam Black",       86,  1, 0},
+-    {"Jim Beam Double Oak",  86,  1, 0},
+-    {"Knob Creek 9yr",      100,  2, 9},
+-    {"Knob Creek 12yr",     100,  3, 12},
+-    {"Knob Creek SiB",      120,  2, 9},
+-    {"Booker's",              0,  3, 0},
+-    {"Baker's 7yr SiB",     107,  3, 7},
+-    {"Basil Hayden's",       80,  2, 0},
+-    {"Old Grand-Dad 114",   114,  1, 0},
+-    {"Old Grand-Dad BiB",   100,  1, 0},
+-    {"Little Book",           0,  4, 0},
+-    {"Legent",               94,  2, 0},
+-};
+-static const LibraryEntry p_bbn_wild_turkey[] = {
+-    {"Wild Turkey 101",     101,  1, 0},
+-    {"Wild Turkey 81",       81,  1, 0},
+-    {"Rare Breed",            0,  2, 0},
+-    {"Russell's Res 10yr",   90,  2, 10},
+-    {"Russell's Res SiB",   110,  3, 0},
+-    {"Kentucky Spirit",     101,  3, 0},
+-    {"Longbranch",           86,  2, 0},
+-};
+-static const LibraryEntry p_bbn_woodford[] = {
+-    {"Woodford Reserve",     90,  2, 0},
+-    {"Woodford Double Oak",  90,  3, 0},
+-    {"Woodford Batch Proof",  0,  4, 0},
+-    {"Woodford Wheat",       90,  2, 0},
+-    {"Woodford Malt",        90,  2, 0},
+-};
+-static const LibraryEntry p_bbn_makers[] = {
+-    {"Maker's Mark",         90,  1, 0},
+-    {"Maker's 46",           94,  2, 0},
+-    {"Maker's Cask Str",      0,  3, 0},
+-    {"Maker's Private Sel",   0,  3, 0},
+-    {"Maker's Cellar Aged",   0,  4, 0},
+-    {"Maker's FAE-01",        0,  3, 0},
+-    {"Maker's FAE-02",        0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_four_roses[] = {
+-    {"Four Roses Yellow",    80,  1, 0},
+-    {"Four Roses SmB",       90,  2, 0},
+-    {"Four Roses SmB Sel",  104,  3, 0},
+-    {"Four Roses SiB",      100,  2, 0},
+-    {"Four Roses SiB BS",     0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_old_forester[] = {
+-    {"Old Forester 86",      86,  1, 0},
+-    {"Old Forester 100",    100,  1, 0},
+-    {"Old Forester 1870",    90,  2, 0},
+-    {"Old Forester 1897",   100,  2, 0},
+-    {"Old Forester 1910",    93,  3, 0},
+-    {"Old Forester 1920",   115,  3, 0},
+-    {"Old Forester SiB",      0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_angels_envy[] = {
+-    {"Angel's Envy Bourbon", 87,  3, 0},
+-    {"Angel's Envy Cask Str", 0,  4, 0},
+-};
+-static const LibraryEntry p_bbn_michters[] = {
+-    {"Michter's US*1 Brbn",  91,  2, 0},
+-    {"Michter's Toasted",    91,  3, 0},
+-    {"Michter's US*1 SrMsh", 91,  2, 0},
+-    {"Michter's 10yr Brbn",  94,  4, 10},
+-};
+-static const LibraryEntry p_bbn_bulleit[] = {
+-    {"Bulleit Bourbon",      90,  1, 0},
+-    {"Bulleit 10yr",         91,  2, 10},
+-    {"Bulleit Barrel Str",    0,  3, 0},
+-    {"Bulleit BiB",         100,  2, 0},
+-};
+-static const LibraryEntry p_bbn_1792[] = {
+-    {"1792 Small Batch",     94,  2, 0},
+-    {"1792 Full Proof",     125,  2, 0},
+-    {"1792 Single Barrel",   99,  2, 0},
+-    {"1792 BiB",            100,  2, 0},
+-    {"1792 Sweet Wheat",     91,  2, 0},
+-    {"1792 Port Finish",     89,  2, 0},
+-};
+-static const LibraryEntry p_bbn_bardstown[] = {
+-    {"Bardstown Discovery",   0,  4, 0},
+-    {"Bardstown Fusion",      0,  3, 0},
+-    {"Bardstown Origin",      0,  3, 0},
+-    {"Bardstown Collab",      0,  4, 0},
+-};
+-static const LibraryEntry p_bbn_willet[] = {
+-    {"Willet Pot Still",     94,  2, 0},
+-    {"Noah's Mill",         114,  3, 0},
+-    {"Rowan's Creek",       100,  2, 0},
+-    {"Johnny Drum",          0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_new_riff[] = {
+-    {"New Riff Bourbon",    100,  2, 0},
+-    {"New Riff SiB",          0,  3, 0},
+-    {"New Riff Backsetter",   0,  2, 0},
+-    {"New Riff Maltster",     0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_wilderness[] = {
+-    {"WT Bourbon BiB",      100,  2, 0},
+-    {"WT SiB Bourbon",        0,  3, 0},
+-    {"WT Wheated BiB",      100,  2, 0},
+-};
+-static const LibraryEntry p_bbn_peerless[] = {
+-    {"Peerless Bourbon",      0,  3, 0},
+-    {"Peerless SmB",          0,  3, 0},
+-    {"Peerless SiB",          0,  4, 0},
+-    {"Peerless Double Oak",   0,  4, 0},
+-};
+-static const LibraryEntry p_bbn_rabbit_hole[] = {
+-    {"Dareringer Bourbon",   93,  3, 0},
+-    {"Cavehill Bourbon",     95,  3, 0},
+-    {"Heigold Bourbon",      95,  3, 0},
+-};
+-static const LibraryEntry p_bbn_castle_key[] = {
+-    {"Castle & Key SmB",      0,  2, 0},
+-    {"Roots of Ruin",         0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_lux_row[] = {
+-    {"Ezra Brooks 99",      99,  1, 0},
+-    {"Ezra Brooks SiB",      0,  2, 0},
+-    {"Rebel 100",           100,  1, 0},
+-    {"Rebel SiB",             0,  2, 0},
+-    {"Blood Oath",            0,  4, 0},
+-    {"David Nicholson 1843",100,  2, 0},
+-    {"David Nicholson Res",  0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_garrison[] = {
+-    {"Garrison SmB",          0,  3, 0},
+-    {"Garrison SiB",          0,  4, 0},
+-    {"Garrison Balmorhea",    0,  4, 0},
+-    {"Garrison Cowboy",       0,  4, 0},
+-    {"Garrison HoneyDew",     0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_stellum[] = {
+-    {"Stellum Bourbon",       0,  3, 0},
+-    {"Stellum Equinox",       0,  3, 0},
+-    {"Stellum SiB",           0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_smoke_wagon[] = {
+-    {"Smoke Wagon SmB",       0,  2, 0},
+-    {"Smoke Wagon Uncut",     0,  3, 0},
+-    {"Smoke Wagon Str Brbn",  0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_starlight[] = {
+-    {"Starlight Bourbon",     0,  3, 0},
+-    {"Starlight Double Oak",  0,  3, 0},
+-    {"Starlight Carl T.",     0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_penelope[] = {
+-    {"Penelope Bourbon",      0,  2, 0},
+-    {"Penelope Barrel Str",   0,  3, 0},
+-    {"Penelope Four Grain",   0,  2, 0},
+-    {"Penelope Architect",    0,  3, 0},
+-    {"Penelope Toasted",      0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_jeffersons[] = {
+-    {"Jefferson's SmB",      82,  2, 0},
+-    {"Jefferson's Reserve",  90,  3, 0},
+-    {"Jefferson's Ocean",    90,  3, 0},
+-    {"Jefferson's Grand Sel", 0,  4, 0},
+-};
+-static const LibraryEntry p_bbn_town_branch[] = {
+-    {"Town Branch Bourbon",  80,  2, 0},
+-    {"Town Branch SiB",       0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_calumet[] = {
+-    {"Calumet Farm Bourbon",  0,  2, 0},
+-    {"Calumet Farm SmB",      0,  3, 0},
+-    {"Calumet Srk Black",     0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_belle_meade[] = {
+-    {"Belle Meade Bourbon",  90,  2, 0},
+-    {"Belle Meade Reserve",   0,  3, 0},
+-    {"Belle Meade SiB",       0,  3, 0},
+-    {"Belle Meade Cask Str",  0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_ky_owl[] = {
+-    {"KY Owl Bourbon",        0,  4, 0},
+-    {"KY Owl Confiscated",    0,  4, 0},
+-    {"KY Owl Takumi",         0,  4, 0},
+-};
+-static const LibraryEntry p_bbn_widow_jane[] = {
+-    {"Widow Jane 10yr",      91,  3, 10},
+-    {"Widow Jane Baby Jane",  0,  3, 0},
+-    {"Widow Jane The Vaults", 0,  4, 0},
+-    {"Widow Jane Oak&Apple",  0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_yellowstone[] = {
+-    {"Yellowstone Select",   93,  2, 0},
+-    {"Yellowstone Ltd Ed",    0,  3, 0},
+-    {"Yellowstone 150th",     0,  4, 0},
+-};
+-static const LibraryEntry p_bbn_pinhook[] = {
+-    {"Pinhook Bourbon War",   0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_frey_ranch[] = {
+-    {"Frey Ranch Bourbon",   90,  3, 0},
+-    {"Frey Ranch SiB",        0,  3, 0},
+-};
+-static const LibraryEntry p_bbn_blue_run[] = {
+-    {"Blue Run High Rye",     0,  4, 0},
+-    {"Blue Run Reflection",   0,  4, 0},
+-};
+-static const LibraryEntry p_bbn_mb_roland[] = {
+-    {"MB Roland Bourbon",     0,  2, 0},
+-    {"MB Roland Dark Fired",  0,  2, 0},
+-};
+-static const LibraryEntry p_bbn_redemption[] = {
+-    {"Redemption Wheated",    0,  2, 0},
++static const char* p_bbn_buffalo_trace[] = {
++    "Buffalo Trace", "Eagle Rare 10yr", "Blanton's Original",
++    "W.L. Weller Special", "W.L. Weller 107", "W.L. Weller 12yr",
++    "E.H. Taylor SmB", "E.H. Taylor SiB", "Stagg Jr",
++    "Elmer T. Lee SiB", "Benchmark No. 8"
++};
++static const char* p_bbn_heaven_hill[] = {
++    "Elijah Craig SmB", "Elijah Craig BP", "Elijah Craig Toasted",
++    "Evan Williams Black", "Evan Williams BiB", "Evan Williams 1783",
++    "Evan Williams SiB", "Larceny SmB", "Larceny BP",
++    "Henry McKenna 10yr", "Old Fitzgerald BiB", "Fighting Cock",
++    "Heaven Hill BiB"
++};
++static const char* p_bbn_jim_beam[] = {
++    "Jim Beam White", "Jim Beam Black", "Jim Beam Double Oak",
++    "Knob Creek 9yr", "Knob Creek 12yr", "Knob Creek SiB",
++    "Booker's", "Baker's 7yr SiB", "Basil Hayden's",
++    "Old Grand-Dad 114", "Old Grand-Dad BiB", "Little Book", "Legent"
++};
++static const char* p_bbn_wild_turkey[] = {
++    "Wild Turkey 101", "Wild Turkey 81", "Rare Breed",
++    "Russell's Res 10yr", "Russell's Res SiB", "Kentucky Spirit",
++    "Longbranch"
++};
++static const char* p_bbn_woodford[] = {
++    "Woodford Reserve", "Woodford Double Oak", "Woodford Batch Proof",
++    "Woodford Wheat", "Woodford Malt"
++};
++static const char* p_bbn_makers[] = {
++    "Maker's Mark", "Maker's 46", "Maker's Cask Str",
++    "Maker's Private Sel", "Maker's Cellar Aged",
++    "Maker's FAE-01", "Maker's FAE-02"
++};
++static const char* p_bbn_four_roses[] = {
++    "Four Roses Yellow", "Four Roses SmB", "Four Roses SmB Sel",
++    "Four Roses SiB", "Four Roses SiB BS"
++};
++static const char* p_bbn_old_forester[] = {
++    "Old Forester 86", "Old Forester 100", "Old Forester 1870",
++    "Old Forester 1897", "Old Forester 1910", "Old Forester 1920",
++    "Old Forester SiB"
++};
++static const char* p_bbn_angels_envy[] = {
++    "Angel's Envy Bourbon", "Angel's Envy Cask Str"
++};
++static const char* p_bbn_michters[] = {
++    "Michter's US*1 Brbn", "Michter's Toasted",
++    "Michter's US*1 SrMsh", "Michter's 10yr Brbn"
++};
++static const char* p_bbn_bulleit[] = {
++    "Bulleit Bourbon", "Bulleit 10yr", "Bulleit Barrel Str",
++    "Bulleit BiB"
++};
++static const char* p_bbn_1792[] = {
++    "1792 Small Batch", "1792 Full Proof", "1792 Single Barrel",
++    "1792 BiB", "1792 Sweet Wheat", "1792 Port Finish"
++};
++static const char* p_bbn_bardstown[] = {
++    "Bardstown Discovery", "Bardstown Fusion",
++    "Bardstown Origin", "Bardstown Collab"
++};
++static const char* p_bbn_willet[] = {
++    "Willet Pot Still", "Noah's Mill", "Rowan's Creek",
++    "Johnny Drum"
++};
++static const char* p_bbn_new_riff[] = {
++    "New Riff Bourbon", "New Riff SiB",
++    "New Riff Backsetter", "New Riff Maltster"
++};
++static const char* p_bbn_wilderness[] = {
++    "WT Bourbon BiB", "WT SiB Bourbon", "WT Wheated BiB"
++};
++static const char* p_bbn_peerless[] = {
++    "Peerless Bourbon", "Peerless SmB",
++    "Peerless SiB", "Peerless Double Oak"
++};
++static const char* p_bbn_rabbit_hole[] = {
++    "Dareringer Bourbon", "Cavehill Bourbon", "Heigold Bourbon"
++};
++static const char* p_bbn_castle_key[] = {
++    "Castle & Key SmB", "Roots of Ruin"
++};
++static const char* p_bbn_lux_row[] = {
++    "Ezra Brooks 99", "Ezra Brooks SiB", "Rebel 100", "Rebel SiB",
++    "Blood Oath", "David Nicholson 1843", "David Nicholson Res"
++};
++static const char* p_bbn_garrison[] = {
++    "Garrison SmB", "Garrison SiB", "Garrison Balmorhea",
++    "Garrison Cowboy", "Garrison HoneyDew"
++};
++static const char* p_bbn_stellum[] = {
++    "Stellum Bourbon", "Stellum Equinox", "Stellum SiB"
++};
++static const char* p_bbn_smoke_wagon[] = {
++    "Smoke Wagon SmB", "Smoke Wagon Uncut", "Smoke Wagon Str Brbn"
++};
++static const char* p_bbn_starlight[] = {
++    "Starlight Bourbon", "Starlight Double Oak", "Starlight Carl T."
++};
++static const char* p_bbn_penelope[] = {
++    "Penelope Bourbon", "Penelope Barrel Str", "Penelope Four Grain",
++    "Penelope Architect", "Penelope Toasted"
++};
++static const char* p_bbn_jeffersons[] = {
++    "Jefferson's SmB", "Jefferson's Reserve",
++    "Jefferson's Ocean", "Jefferson's Grand Sel"
++};
++static const char* p_bbn_town_branch[] = {
++    "Town Branch Bourbon", "Town Branch SiB"
++};
++static const char* p_bbn_calumet[] = {
++    "Calumet Farm Bourbon", "Calumet Farm SmB", "Calumet Srk Black"
++};
++static const char* p_bbn_belle_meade[] = {
++    "Belle Meade Bourbon", "Belle Meade Reserve",
++    "Belle Meade SiB", "Belle Meade Cask Str"
++};
++static const char* p_bbn_ky_owl[] = {
++    "KY Owl Bourbon", "KY Owl Confiscated", "KY Owl Takumi"
++};
++static const char* p_bbn_widow_jane[] = {
++    "Widow Jane 10yr", "Widow Jane Baby Jane",
++    "Widow Jane The Vaults", "Widow Jane Oak&Apple"
++};
++static const char* p_bbn_yellowstone[] = {
++    "Yellowstone Select", "Yellowstone Ltd Ed", "Yellowstone 150th"
++};
++static const char* p_bbn_pinhook[] = {
++    "Pinhook Bourbon War"
++};
++static const char* p_bbn_frey_ranch[] = {
++    "Frey Ranch Bourbon", "Frey Ranch SiB"
++};
++static const char* p_bbn_blue_run[] = {
++    "Blue Run High Rye", "Blue Run Reflection"
++};
++static const char* p_bbn_mb_roland[] = {
++    "MB Roland Bourbon", "MB Roland Dark Fired"
++};
++static const char* p_bbn_redemption[] = {
++    "Redemption Wheated"
+ };
+ 
+ #define DISTILLERY(name, arr) { name, arr, sizeof(arr)/sizeof(arr[0]) }
+@@ -302,46 +200,30 @@ static const WhiskeyDistillery d_bourbon[] = {
+ // TENNESSEE WHISKEY
+ // ============================================================
+ 
+-static const LibraryEntry p_tn_jack[] = {
+-    {"Old No. 7",            80,  1, 0},
+-    {"Gentleman Jack",       80,  2, 0},
+-    {"Single Barrel Sel",   100,  3, 0},
+-    {"Single Barrel BP",      0,  3, 0},
+-    {"Sinatra Select",       90,  4, 0},
+-    {"Tennessee Rye",        90,  1, 0},
+-    {"Bonded",              100,  2, 0},
+-};
+-static const LibraryEntry p_tn_dickel[] = {
+-    {"Dickel No. 8",         80,  1, 0},
+-    {"Dickel No. 12",        90,  1, 0},
+-    {"Dickel BiB",          100,  2, 0},
+-    {"Dickel Barrel Select",  0,  2, 0},
+-    {"Dickel Single Barrel",  0,  3, 0},
+-};
+-static const LibraryEntry p_tn_uncle_nearest[] = {
+-    {"Uncle Nearest 1856",   93,  3, 0},
+-    {"Uncle Nearest 1884",   93,  2, 0},
+-    {"Uncle Nearest SiB",     0,  3, 0},
+-    {"Uncle Nearest Master",  0,  4, 0},
+-};
+-static const LibraryEntry p_tn_nelsons[] = {
+-    {"Nelson's First 108",  108,  2, 0},
+-    {"Nelson's Reserve",      0,  2, 0},
+-    {"Nelson's Classic",      0,  2, 0},
+-};
+-static const LibraryEntry p_tn_chattanooga[] = {
+-    {"Chattanooga 91",       91,  2, 0},
+-    {"Chattanooga 111",     111,  2, 0},
+-    {"Chattanooga Cask",      0,  3, 0},
+-    {"Chattanooga SiB",       0,  3, 0},
+-};
+-static const LibraryEntry p_tn_corsair[] = {
+-    {"Corsair Triple Smoke",  0,  2, 0},
+-    {"Corsair Ryemaggedon",   0,  2, 0},
+-};
+-static const LibraryEntry p_tn_popcorn[] = {
+-    {"Popcorn Sutton SmB",    0,  2, 0},
+-    {"Popcorn Sutton SiB",    0,  3, 0},
++static const char* p_tn_jack[] = {
++    "Old No. 7", "Gentleman Jack", "Single Barrel Sel",
++    "Single Barrel BP", "Sinatra Select", "Tennessee Rye", "Bonded"
++};
++static const char* p_tn_dickel[] = {
++    "Dickel No. 8", "Dickel No. 12", "Dickel BiB",
++    "Dickel Barrel Select", "Dickel Single Barrel"
++};
++static const char* p_tn_uncle_nearest[] = {
++    "Uncle Nearest 1856", "Uncle Nearest 1884",
++    "Uncle Nearest SiB", "Uncle Nearest Master"
++};
++static const char* p_tn_nelsons[] = {
++    "Nelson's First 108", "Nelson's Reserve", "Nelson's Classic"
++};
++static const char* p_tn_chattanooga[] = {
++    "Chattanooga 91", "Chattanooga 111",
++    "Chattanooga Cask", "Chattanooga SiB"
++};
++static const char* p_tn_corsair[] = {
++    "Corsair Triple Smoke", "Corsair Ryemaggedon"
++};
++static const char* p_tn_popcorn[] = {
++    "Popcorn Sutton SmB", "Popcorn Sutton SiB"
+ };
+ 
+ static const WhiskeyDistillery d_tennessee[] = {
+@@ -358,131 +240,106 @@ static const WhiskeyDistillery d_tennessee[] = {
+ // AMERICAN RYE
+ // ============================================================
+ 
+-static const LibraryEntry p_rye_whistlepig[] = {
+-    {"WhistlePig 6yr",      100,  3, 6},
+-    {"WhistlePig 10yr",     100,  3, 10},
+-    {"WhistlePig 12yr",      86,  4, 12},
+-    {"WhistlePig 15yr",      92,  4, 15},
+-    {"WhistlePig 18yr",      92,  4, 18},
+-    {"WhistlePig PiggyBack",96,  2, 0},
+-    {"WhistlePig Boss Hog",   0,  4, 0},
+-};
+-static const LibraryEntry p_rye_sazerac[] = {
+-    {"Sazerac Rye 6yr",      90,  1, 6},
+-    {"Thomas H. Handy",       0,  4, 0},
+-};
+-static const LibraryEntry p_rye_high_west[] = {
+-    {"High West Double Rye", 92,  2, 0},
+-    {"High West Rendezvous",92,  3, 0},
+-    {"High West Bourye",      0,  3, 0},
+-    {"High West Midwinter",   0,  4, 0},
+-};
+-static const LibraryEntry p_rye_pikesville[] = {
+-    {"Pikesville 110",      110,  2, 0},
+-};
+-static const LibraryEntry p_rye_rittenhouse[] = {
+-    {"Rittenhouse BiB",     100,  1, 0},
+-};
+-static const LibraryEntry p_rye_old_overholt[] = {
+-    {"Old Overholt",         80,  1, 0},
+-    {"Old Overholt BiB",    100,  1, 0},
+-    {"Old Overholt 114",    114,  1, 0},
+-};
+-static const LibraryEntry p_rye_sagamore[] = {
+-    {"Sagamore Signature",   83,  2, 0},
+-    {"Sagamore Cask Str",     0,  3, 0},
+-    {"Sagamore Double Oak",  83,  2, 0},
+-    {"Sagamore Barrel Sel",   0,  3, 0},
+-};
+-static const LibraryEntry p_rye_templeton[] = {
+-    {"Templeton 4yr",        80,  2, 4},
+-    {"Templeton 6yr",        91,  2, 6},
+-    {"Templeton 10yr",      104,  3, 10},
+-    {"Templeton Barrel Str",  0,  3, 0},
+-};
+-static const LibraryEntry p_rye_few[] = {
+-    {"FEW Straight Rye",     93,  2, 0},
+-    {"FEW Single Barrel",     0,  3, 0},
+-};
+-static const LibraryEntry p_rye_barrell[] = {
+-    {"Barrell Rye",           0,  3, 0},
+-    {"Barrell Seagrass",      0,  3, 0},
+-    {"Barrell Dovetail",      0,  3, 0},
+-    {"Barrell Vantage",       0,  3, 0},
+-    {"Barrell Gold Label",    0,  4, 0},
+-};
+-static const LibraryEntry p_rye_willet[] = {
+-    {"Willet Family Rye",     0,  4, 0},
+-    {"Willet 4yr Rye",      110,  3, 4},
+-};
+-static const LibraryEntry p_rye_dads_hat[] = {
+-    {"Dad's Hat Rye",        90,  2, 0},
+-    {"Dad's Hat Vermouth",   94,  2, 0},
+-};
+-static const LibraryEntry p_rye_lock_stock[] = {
+-    {"Lock Stock 13yr",       0,  4, 13},
+-    {"Lock Stock 16yr",       0,  4, 16},
+-    {"Lock Stock 18yr",       0,  4, 18},
+-    {"Lock Stock 20yr",       0,  4, 20},
++static const char* p_rye_whistlepig[] = {
++    "WhistlePig 6yr", "WhistlePig 10yr", "WhistlePig 12yr",
++    "WhistlePig 15yr", "WhistlePig 18yr", "WhistlePig PiggyBack",
++    "WhistlePig Boss Hog"
++};
++static const char* p_rye_sazerac[] = {
++    "Sazerac Rye 6yr", "Thomas H. Handy"
++};
++static const char* p_rye_high_west[] = {
++    "High West Double Rye", "High West Rendezvous",
++    "High West Bourye", "High West Midwinter"
++};
++static const char* p_rye_pikesville[] = {
++    "Pikesville 110"
++};
++static const char* p_rye_rittenhouse[] = {
++    "Rittenhouse BiB"
++};
++static const char* p_rye_old_overholt[] = {
++    "Old Overholt", "Old Overholt BiB", "Old Overholt 114"
++};
++static const char* p_rye_sagamore[] = {
++    "Sagamore Signature", "Sagamore Cask Str",
++    "Sagamore Double Oak", "Sagamore Barrel Sel"
++};
++static const char* p_rye_templeton[] = {
++    "Templeton 4yr", "Templeton 6yr",
++    "Templeton 10yr", "Templeton Barrel Str"
++};
++static const char* p_rye_few[] = {
++    "FEW Straight Rye", "FEW Single Barrel"
++};
++static const char* p_rye_barrell[] = {
++    "Barrell Rye", "Barrell Seagrass", "Barrell Dovetail",
++    "Barrell Vantage", "Barrell Gold Label"
++};
++static const char* p_rye_willet[] = {
++    "Willet Family Rye", "Willet 4yr Rye"
++};
++static const char* p_rye_dads_hat[] = {
++    "Dad's Hat Rye", "Dad's Hat Vermouth"
++};
++static const char* p_rye_lock_stock[] = {
++    "Lock Stock 13yr", "Lock Stock 16yr",
++    "Lock Stock 18yr", "Lock Stock 20yr"
+ };
+ // Rye products moved from bourbon distilleries:
+-static const LibraryEntry p_rye_wild_turkey[] = {
+-    {"Wild Turkey 101 Rye", 101,  1, 0},
+-    {"Russell's Res Rye",    90,  2, 0},
++static const char* p_rye_wild_turkey[] = {
++    "Wild Turkey 101 Rye", "Russell's Res Rye"
+ };
+-static const LibraryEntry p_rye_woodford[] = {
+-    {"Woodford Reserve Rye", 90,  2, 0},
++static const char* p_rye_woodford[] = {
++    "Woodford Reserve Rye"
+ };
+-static const LibraryEntry p_rye_bulleit[] = {
+-    {"Bulleit Rye",          90,  1, 0},
++static const char* p_rye_bulleit[] = {
++    "Bulleit Rye"
+ };
+-static const LibraryEntry p_rye_angels_envy[] = {
+-    {"Angel's Envy Rye",    100,  4, 0},
++static const char* p_rye_angels_envy[] = {
++    "Angel's Envy Rye"
+ };
+-static const LibraryEntry p_rye_michters[] = {
+-    {"Michter's US*1 Rye",   85,  2, 0},
++static const char* p_rye_michters[] = {
++    "Michter's US*1 Rye"
+ };
+-static const LibraryEntry p_rye_knob_creek[] = {
+-    {"Knob Creek Rye 7yr",  100,  2, 7},
+-    {"Knob Creek SiB Rye",  115,  3, 0},
++static const char* p_rye_knob_creek[] = {
++    "Knob Creek Rye 7yr", "Knob Creek SiB Rye"
+ };
+-static const LibraryEntry p_rye_old_forester[] = {
+-    {"Old Forester Rye",    100,  1, 0},
++static const char* p_rye_old_forester[] = {
++    "Old Forester Rye"
+ };
+-static const LibraryEntry p_rye_new_riff[] = {
+-    {"New Riff Rye",        100,  2, 0},
++static const char* p_rye_new_riff[] = {
++    "New Riff Rye"
+ };
+-static const LibraryEntry p_rye_peerless[] = {
+-    {"Peerless Rye",          0,  3, 0},
++static const char* p_rye_peerless[] = {
++    "Peerless Rye"
+ };
+-static const LibraryEntry p_rye_rabbit_hole[] = {
+-    {"Boxergrail Rye",       95,  3, 0},
++static const char* p_rye_rabbit_hole[] = {
++    "Boxergrail Rye"
+ };
+-static const LibraryEntry p_rye_castle_key[] = {
+-    {"Restoration Rye",       0,  2, 0},
++static const char* p_rye_castle_key[] = {
++    "Restoration Rye"
+ };
+-static const LibraryEntry p_rye_redemption[] = {
+-    {"Redemption High Rye",   0,  2, 0},
+-    {"Redemption BP Rye",     0,  3, 0},
++static const char* p_rye_redemption[] = {
++    "Redemption High Rye", "Redemption BP Rye"
+ };
+-static const LibraryEntry p_rye_wilderness[] = {
+-    {"WT Rye BiB",          100,  2, 0},
++static const char* p_rye_wilderness[] = {
++    "WT Rye BiB"
+ };
+-static const LibraryEntry p_rye_town_branch[] = {
+-    {"Town Branch Rye",      0,  2, 0},
++static const char* p_rye_town_branch[] = {
++    "Town Branch Rye"
+ };
+-static const LibraryEntry p_rye_frey_ranch[] = {
+-    {"Frey Ranch Rye",       90,  3, 0},
++static const char* p_rye_frey_ranch[] = {
++    "Frey Ranch Rye"
+ };
+-static const LibraryEntry p_rye_pinhook[] = {
+-    {"Pinhook Rye Humor",     0,  2, 0},
++static const char* p_rye_pinhook[] = {
++    "Pinhook Rye Humor"
+ };
+-static const LibraryEntry p_rye_blue_run[] = {
+-    {"Blue Run Golden Rye",   0,  4, 0},
+-    {"Blue Run Emerald Rye",  0,  4, 0},
++static const char* p_rye_blue_run[] = {
++    "Blue Run Golden Rye", "Blue Run Emerald Rye"
+ };
+-static const LibraryEntry p_rye_four_roses[] = {
+-    {"Four Roses SiB Rye",    0,  3, 0},
++static const char* p_rye_four_roses[] = {
++    "Four Roses SiB Rye"
+ };
+ 
+ static const WhiskeyDistillery d_rye[] = {
+@@ -523,297 +380,182 @@ static const WhiskeyDistillery d_rye[] = {
+ // SCOTCH — SINGLE MALT
+ // ============================================================
+ 
+-static const LibraryEntry p_sc_glenfiddich[] = {
+-    {"Glenfiddich 12yr",     80,  2, 12},
+-    {"Glenfiddich 14yr",     86,  3, 14},
+-    {"Glenfiddich 15yr",     80,  3, 15},
+-    {"Glenfiddich 18yr",     80,  3, 18},
+-    {"Glenfiddich 21yr",     80,  4, 21},
+-    {"Glenfiddich Fire&Cane",86,  3, 0},
+-    {"Glenfiddich IPA Cask", 86,  2, 0},
+-};
+-static const LibraryEntry p_sc_glenlivet[] = {
+-    {"Glenlivet 12yr",       80,  2, 12},
+-    {"Glenlivet 14yr",       80,  2, 14},
+-    {"Glenlivet 15yr",       80,  3, 15},
+-    {"Glenlivet 18yr",       86,  3, 18},
+-    {"Glenlivet 21yr",       86,  4, 21},
+-    {"Glenlivet Nadurra",     0,  3, 0},
+-    {"Glenlivet Caribbean",  80,  2, 0},
+-};
+-static const LibraryEntry p_sc_macallan[] = {
+-    {"Macallan 12 Sherry",   86,  3, 12},
+-    {"Macallan 12 Dbl Cask", 86,  3, 12},
+-    {"Macallan 15 Dbl Cask", 86,  4, 15},
+-    {"Macallan 18 Sherry",   86,  4, 18},
+-    {"Macallan 18 Dbl Cask", 86,  4, 18},
+-    {"Macallan Rare Cask",   86,  4, 0},
+-    {"Macallan Classic Cut",  0,  4, 0},
+-};
+-static const LibraryEntry p_sc_balvenie[] = {
+-    {"Balvenie 12 DblWood",  86,  3, 12},
+-    {"Balvenie 14 Carib",    86,  3, 14},
+-    {"Balvenie 17 DblWood",  86,  4, 17},
+-    {"Balvenie 21 PortWood", 86,  4, 21},
+-    {"Balvenie 25yr",        86,  4, 25},
+-};
+-static const LibraryEntry p_sc_aberlour[] = {
+-    {"Aberlour 12yr",        86,  2, 12},
+-    {"Aberlour 12 NCF",      96,  3, 12},
+-    {"Aberlour 16yr",        80,  3, 16},
+-    {"Aberlour A'Bunadh",     0,  3, 0},
+-    {"Aberlour Casg Annamh", 96,  3, 0},
+-};
+-static const LibraryEntry p_sc_glenfarclas[] = {
+-    {"Glenfarclas 10yr",     80,  2, 10},
+-    {"Glenfarclas 12yr",     86,  2, 12},
+-    {"Glenfarclas 15yr",     92,  3, 15},
+-    {"Glenfarclas 17yr",     86,  3, 17},
+-    {"Glenfarclas 21yr",     86,  4, 21},
+-    {"Glenfarclas 25yr",     86,  4, 25},
+-    {"Glenfarclas 105",     120,  3, 0},
+-};
+-static const LibraryEntry p_sc_glenmorangie[] = {
+-    {"Glenmorangie Original",86,  2, 10},
+-    {"Glenmorangie Lasanta", 86,  3, 12},
+-    {"Glenmorangie Quinta",  92,  3, 14},
+-    {"Glenmorangie Nectar",  92,  3, 0},
+-    {"Glenmorangie 18yr",    86,  3, 18},
+-    {"Glenmorangie Signet",  92,  4, 0},
+-};
+-static const LibraryEntry p_sc_dalmore[] = {
+-    {"Dalmore 12yr",         80,  3, 12},
+-    {"Dalmore 15yr",         80,  3, 15},
+-    {"Dalmore 18yr",         86,  4, 18},
+-    {"Dalmore Cigar Malt",   88,  4, 0},
+-    {"Dalmore King Alex",    80,  4, 0},
+-};
+-static const LibraryEntry p_sc_highland_park[] = {
+-    {"Highland Park 12yr",   86,  3, 12},
+-    {"Highland Park 15yr",   86,  3, 15},
+-    {"Highland Park 18yr",   86,  4, 18},
+-    {"Highland Park 25yr",   92,  4, 25},
+-    {"Highland Park CS",      0,  4, 0},
+-};
+-static const LibraryEntry p_sc_laphroaig[] = {
+-    {"Laphroaig 10yr",       86,  2, 10},
+-    {"Laphroaig 10 CS",       0,  3, 10},
+-    {"Laphroaig Quarter",    96,  2, 0},
+-    {"Laphroaig Select",     80,  2, 0},
+-    {"Laphroaig Lore",       96,  3, 0},
+-    {"Laphroaig 25yr",       97,  4, 25},
+-};
+-static const LibraryEntry p_sc_ardbeg[] = {
+-    {"Ardbeg 10yr",          92,  2, 10},
+-    {"Ardbeg Uigeadail",    108,  3, 0},
+-    {"Ardbeg Corryvreckan", 114,  3, 0},
+-    {"Ardbeg An Oa",         93,  3, 0},
+-    {"Ardbeg Wee Beastie",   94,  2, 5},
+-};
+-static const LibraryEntry p_sc_lagavulin[] = {
+-    {"Lagavulin 8yr",        96,  3, 8},
+-    {"Lagavulin 16yr",       86,  3, 16},
+-    {"Lagavulin DE",         86,  3, 0},
+-    {"Lagavulin 12 CS",       0,  4, 12},
+-};
+-static const LibraryEntry p_sc_bruichladdich[] = {
+-    {"Bruichladdich Classic",100,  3, 0},
+-    {"Port Charlotte 10yr", 100,  3, 10},
+-    {"Octomore",              0,  4, 0},
+-};
+-static const LibraryEntry p_sc_bowmore[] = {
+-    {"Bowmore 12yr",         80,  2, 12},
+-    {"Bowmore 15yr",         86,  3, 15},
+-    {"Bowmore 18yr",         86,  3, 18},
+-    {"Bowmore 25yr",         86,  4, 25},
+-    {"Bowmore No. 1",        80,  2, 0},
+-};
+-static const LibraryEntry p_sc_bunnahabhain[] = {
+-    {"Bunnahabhain 12yr",    92,  3, 12},
+-    {"Bunnahabhain 18yr",    92,  4, 18},
+-    {"Bunnahabhain 25yr",    92,  4, 25},
+-    {"Bunnahabhain Stiuir",  92,  3, 0},
+-    {"Bunnahabhain Toiteach",92,  3, 0},
+-};
+-static const LibraryEntry p_sc_talisker[] = {
+-    {"Talisker 10yr",        91,  3, 10},
+-    {"Talisker Storm",       91,  2, 0},
+-    {"Talisker 18yr",        91,  4, 18},
+-    {"Talisker 25yr",        91,  4, 25},
+-    {"Talisker DE",          91,  3, 0},
+-    {"Talisker Port Ruighe", 91,  3, 0},
+-};
+-static const LibraryEntry p_sc_oban[] = {
+-    {"Oban 14yr",            86,  3, 14},
+-    {"Oban Little Bay",      86,  3, 0},
+-    {"Oban 18yr",            86,  4, 18},
+-    {"Oban DE",              86,  3, 0},
+-};
+-static const LibraryEntry p_sc_springbank[] = {
+-    {"Springbank 10yr",      92,  3, 10},
+-    {"Springbank 12 CS",      0,  4, 12},
+-    {"Springbank 15yr",      92,  4, 15},
+-    {"Springbank 18yr",      92,  4, 18},
+-    {"Springbank 21yr",      92,  4, 21},
+-    {"Hazelburn 10yr",       92,  3, 10},
+-    {"Longrow Peated",       92,  3, 0},
+-};
+-static const LibraryEntry p_sc_dalwhinnie[] = {
+-    {"Dalwhinnie 15yr",      86,  3, 15},
+-    {"Dalwhinnie DE",        86,  3, 0},
+-    {"Dalwhinnie Winter",    86,  3, 0},
+-};
+-static const LibraryEntry p_sc_cragganmore[] = {
+-    {"Cragganmore 12yr",     80,  2, 12},
+-    {"Cragganmore DE",       80,  3, 0},
+-};
+-static const LibraryEntry p_sc_clynelish[] = {
+-    {"Clynelish 14yr",       92,  3, 14},
+-    {"Clynelish DE",          0,  3, 0},
+-};
+-static const LibraryEntry p_sc_jura[] = {
+-    {"Jura 10yr",            80,  2, 10},
+-    {"Jura 12yr",            80,  2, 12},
+-    {"Jura 18yr",            88,  3, 18},
+-    {"Jura Seven Wood",      84,  3, 0},
+-};
+-static const LibraryEntry p_sc_tomatin[] = {
+-    {"Tomatin 12yr",         86,  2, 12},
+-    {"Tomatin 14yr Port",    92,  2, 14},
+-    {"Tomatin 18yr",         92,  3, 18},
+-    {"Tomatin Legacy",       86,  2, 0},
+-    {"Tomatin Cu Bocan",     92,  2, 0},
+-};
+-static const LibraryEntry p_sc_benriach[] = {
+-    {"BenRiach Original",    86,  2, 10},
+-    {"BenRiach Smoky 10",    92,  2, 10},
+-    {"BenRiach The Twelve",  92,  3, 12},
+-    {"BenRiach 21yr",        92,  4, 21},
+-    {"BenRiach Curiositas",  92,  3, 0},
+-};
+-static const LibraryEntry p_sc_glendronach[] = {
+-    {"GlenDronach 12yr",     86,  3, 12},
+-    {"GlenDronach 15yr",     92,  3, 15},
+-    {"GlenDronach 18yr",     92,  4, 18},
+-    {"GlenDronach 21yr",     96,  4, 21},
+-    {"GlenDronach CS",        0,  4, 0},
+-};
+-static const LibraryEntry p_sc_caol_ila[] = {
+-    {"Caol Ila 12yr",        86,  3, 12},
+-    {"Caol Ila 18yr",        86,  4, 18},
+-    {"Caol Ila DE",          86,  3, 0},
+-    {"Caol Ila Moch",        86,  2, 0},
+-};
+-static const LibraryEntry p_sc_glenkinchie[] = {
+-    {"Glenkinchie 12yr",     86,  2, 12},
+-    {"Glenkinchie DE",       86,  3, 0},
+-};
+-static const LibraryEntry p_sc_auchentoshan[] = {
+-    {"Auchentoshan 12yr",    80,  2, 12},
+-    {"Auchentoshan ThreeWd", 86,  2, 0},
+-    {"Auchentoshan American",80,  1, 0},
+-};
+-static const LibraryEntry p_sc_edradour[] = {
+-    {"Edradour 10yr",        80,  3, 10},
+-    {"Edradour 12yr CS",      0,  3, 12},
+-    {"Edradour Caledonia",   92,  3, 0},
+-};
+-static const LibraryEntry p_sc_craigellachie[] = {
+-    {"Craigellachie 13yr",   92,  3, 13},
+-    {"Craigellachie 17yr",   92,  3, 17},
+-    {"Craigellachie 23yr",   92,  4, 23},
+-};
+-static const LibraryEntry p_sc_glen_moray[] = {
+-    {"Glen Moray Classic",   80,  1, 0},
+-    {"Glen Moray 12yr",      80,  2, 12},
+-    {"Glen Moray 15yr",      80,  2, 15},
+-    {"Glen Moray 18yr",      94,  3, 18},
+-    {"Glen Moray Sherry",    80,  2, 0},
+-};
+-static const LibraryEntry p_sc_cardhu[] = {
+-    {"Cardhu 12yr",          80,  2, 12},
+-    {"Cardhu Gold Reserve",  80,  2, 0},
+-    {"Cardhu 15yr",          80,  3, 15},
+-};
+-static const LibraryEntry p_sc_deanston[] = {
+-    {"Deanston 12yr",        92,  2, 12},
+-    {"Deanston 18yr",        92,  3, 18},
+-    {"Deanston Virgin Oak",  92,  2, 0},
+-};
+-static const LibraryEntry p_sc_tobermory[] = {
+-    {"Tobermory 12yr",       92,  3, 12},
+-    {"Tobermory 20yr",        0,  4, 20},
+-    {"Ledaig 10yr",          92,  3, 10},
+-    {"Ledaig 18yr",          92,  4, 18},
+-};
+-static const LibraryEntry p_sc_kilchoman[] = {
+-    {"Kilchoman Machir Bay", 92,  3, 0},
+-    {"Kilchoman Sanaig",     92,  3, 0},
+-    {"Kilchoman 100% Islay", 100, 3, 0},
+-    {"Kilchoman Loch Gorm",  92,  3, 0},
+-};
+-static const LibraryEntry p_sc_pulteney[] = {
+-    {"Old Pulteney 12yr",    80,  2, 12},
+-    {"Old Pulteney 15yr",    92,  3, 15},
+-    {"Old Pulteney 18yr",    92,  3, 18},
+-    {"Old Pulteney Huddart", 92,  2, 0},
+-};
+-static const LibraryEntry p_sc_benromach[] = {
+-    {"Benromach 10yr",       86,  2, 10},
+-    {"Benromach 15yr",       86,  3, 15},
+-    {"Benromach Peat Smoke", 92,  3, 0},
+-    {"Benromach CS",          0,  3, 0},
+-};
+-static const LibraryEntry p_sc_mortlach[] = {
+-    {"Mortlach 12yr",        86,  3, 12},
+-    {"Mortlach 16yr",        86,  4, 16},
+-    {"Mortlach 20yr",        86,  4, 20},
+-};
+-static const LibraryEntry p_sc_glen_scotia[] = {
+-    {"Glen Scotia 15yr",     92,  3, 15},
+-    {"Glen Scotia 18yr",     92,  4, 18},
+-    {"Glen Scotia 25yr",     92,  4, 25},
+-    {"Glen Scotia Victoriana", 0, 3, 0},
+-    {"Glen Scotia Dbl Cask", 92,  2, 0},
+-};
+-static const LibraryEntry p_sc_tomintoul[] = {
+-    {"Tomintoul 10yr",       80,  2, 10},
+-    {"Tomintoul 14yr",       92,  2, 14},
+-    {"Tomintoul 16yr",       80,  3, 16},
+-    {"Tomintoul Peaty Tang", 80,  2, 0},
+-};
+-static const LibraryEntry p_sc_royal_brackla[] = {
+-    {"Royal Brackla 12yr",   80,  3, 12},
+-    {"Royal Brackla 16yr",   80,  3, 16},
+-    {"Royal Brackla 21yr",   80,  4, 21},
+-};
+-static const LibraryEntry p_sc_speyburn[] = {
+-    {"Speyburn 10yr",        80,  2, 10},
+-    {"Speyburn 15yr",        92,  3, 15},
+-    {"Speyburn 18yr",        92,  3, 18},
+-};
+-static const LibraryEntry p_sc_ancnoc[] = {
+-    {"anCnoc 12yr",          80,  2, 12},
+-    {"anCnoc 18yr",          92,  3, 18},
+-    {"anCnoc 24yr",          92,  4, 24},
+-    {"anCnoc Peatheart",      0,  3, 0},
+-};
+-static const LibraryEntry p_sc_balblair[] = {
+-    {"Balblair 12yr",        92,  3, 12},
+-    {"Balblair 15yr",        92,  3, 15},
+-    {"Balblair 18yr",        92,  4, 18},
+-    {"Balblair 25yr",        92,  4, 25},
+-};
+-static const LibraryEntry p_sc_glencadam[] = {
+-    {"Glencadam 10yr",       92,  2, 10},
+-    {"Glencadam 13yr",       92,  3, 13},
+-    {"Glencadam 15yr",       92,  3, 15},
+-    {"Glencadam 21yr",       92,  4, 21},
+-};
+-static const LibraryEntry p_sc_aberfeldy[] = {
+-    {"Aberfeldy 12yr",       80,  2, 12},
+-    {"Aberfeldy 16yr",       80,  3, 16},
+-    {"Aberfeldy 21yr",       80,  4, 21},
++static const char* p_sc_glenfiddich[] = {
++    "Glenfiddich 12yr", "Glenfiddich 14yr", "Glenfiddich 15yr",
++    "Glenfiddich 18yr", "Glenfiddich 21yr", "Glenfiddich Fire&Cane",
++    "Glenfiddich IPA Cask"
++};
++static const char* p_sc_glenlivet[] = {
++    "Glenlivet 12yr", "Glenlivet 14yr", "Glenlivet 15yr",
++    "Glenlivet 18yr", "Glenlivet 21yr", "Glenlivet Nadurra",
++    "Glenlivet Caribbean"
++};
++static const char* p_sc_macallan[] = {
++    "Macallan 12 Sherry", "Macallan 12 Dbl Cask",
++    "Macallan 15 Dbl Cask", "Macallan 18 Sherry",
++    "Macallan 18 Dbl Cask", "Macallan Rare Cask",
++    "Macallan Classic Cut"
++};
++static const char* p_sc_balvenie[] = {
++    "Balvenie 12 DblWood", "Balvenie 14 Carib",
++    "Balvenie 17 DblWood", "Balvenie 21 PortWood", "Balvenie 25yr"
++};
++static const char* p_sc_aberlour[] = {
++    "Aberlour 12yr", "Aberlour 12 NCF", "Aberlour 16yr",
++    "Aberlour A'Bunadh", "Aberlour Casg Annamh"
++};
++static const char* p_sc_glenfarclas[] = {
++    "Glenfarclas 10yr", "Glenfarclas 12yr", "Glenfarclas 15yr",
++    "Glenfarclas 17yr", "Glenfarclas 21yr", "Glenfarclas 25yr",
++    "Glenfarclas 105"
++};
++static const char* p_sc_glenmorangie[] = {
++    "Glenmorangie Original", "Glenmorangie Lasanta",
++    "Glenmorangie Quinta", "Glenmorangie Nectar",
++    "Glenmorangie 18yr", "Glenmorangie Signet"
++};
++static const char* p_sc_dalmore[] = {
++    "Dalmore 12yr", "Dalmore 15yr", "Dalmore 18yr",
++    "Dalmore Cigar Malt", "Dalmore King Alex"
++};
++static const char* p_sc_highland_park[] = {
++    "Highland Park 12yr", "Highland Park 15yr",
++    "Highland Park 18yr", "Highland Park 25yr",
++    "Highland Park CS"
++};
++static const char* p_sc_laphroaig[] = {
++    "Laphroaig 10yr", "Laphroaig 10 CS",
++    "Laphroaig Quarter", "Laphroaig Select",
++    "Laphroaig Lore", "Laphroaig 25yr"
++};
++static const char* p_sc_ardbeg[] = {
++    "Ardbeg 10yr", "Ardbeg Uigeadail", "Ardbeg Corryvreckan",
++    "Ardbeg An Oa", "Ardbeg Wee Beastie"
++};
++static const char* p_sc_lagavulin[] = {
++    "Lagavulin 8yr", "Lagavulin 16yr",
++    "Lagavulin DE", "Lagavulin 12 CS"
++};
++static const char* p_sc_bruichladdich[] = {
++    "Bruichladdich Classic", "Port Charlotte 10yr",
++    "Octomore"
++};
++static const char* p_sc_bowmore[] = {
++    "Bowmore 12yr", "Bowmore 15yr", "Bowmore 18yr",
++    "Bowmore 25yr", "Bowmore No. 1"
++};
++static const char* p_sc_bunnahabhain[] = {
++    "Bunnahabhain 12yr", "Bunnahabhain 18yr",
++    "Bunnahabhain 25yr", "Bunnahabhain Stiuir",
++    "Bunnahabhain Toiteach"
++};
++static const char* p_sc_talisker[] = {
++    "Talisker 10yr", "Talisker Storm", "Talisker 18yr",
++    "Talisker 25yr", "Talisker DE", "Talisker Port Ruighe"
++};
++static const char* p_sc_oban[] = {
++    "Oban 14yr", "Oban Little Bay", "Oban 18yr", "Oban DE"
++};
++static const char* p_sc_springbank[] = {
++    "Springbank 10yr", "Springbank 12 CS", "Springbank 15yr",
++    "Springbank 18yr", "Springbank 21yr",
++    "Hazelburn 10yr", "Longrow Peated"
++};
++static const char* p_sc_dalwhinnie[] = {
++    "Dalwhinnie 15yr", "Dalwhinnie DE", "Dalwhinnie Winter"
++};
++static const char* p_sc_cragganmore[] = {
++    "Cragganmore 12yr", "Cragganmore DE"
++};
++static const char* p_sc_clynelish[] = {
++    "Clynelish 14yr", "Clynelish DE"
++};
++static const char* p_sc_jura[] = {
++    "Jura 10yr", "Jura 12yr", "Jura 18yr", "Jura Seven Wood"
++};
++static const char* p_sc_tomatin[] = {
++    "Tomatin 12yr", "Tomatin 14yr Port", "Tomatin 18yr",
++    "Tomatin Legacy", "Tomatin Cu Bocan"
++};
++static const char* p_sc_benriach[] = {
++    "BenRiach Original", "BenRiach Smoky 10",
++    "BenRiach The Twelve", "BenRiach 21yr",
++    "BenRiach Curiositas"
++};
++static const char* p_sc_glendronach[] = {
++    "GlenDronach 12yr", "GlenDronach 15yr", "GlenDronach 18yr",
++    "GlenDronach 21yr", "GlenDronach CS"
++};
++static const char* p_sc_caol_ila[] = {
++    "Caol Ila 12yr", "Caol Ila 18yr", "Caol Ila DE", "Caol Ila Moch"
++};
++static const char* p_sc_glenkinchie[] = {
++    "Glenkinchie 12yr", "Glenkinchie DE"
++};
++static const char* p_sc_auchentoshan[] = {
++    "Auchentoshan 12yr", "Auchentoshan ThreeWd",
++    "Auchentoshan American"
++};
++static const char* p_sc_edradour[] = {
++    "Edradour 10yr", "Edradour 12yr CS", "Edradour Caledonia"
++};
++static const char* p_sc_craigellachie[] = {
++    "Craigellachie 13yr", "Craigellachie 17yr", "Craigellachie 23yr"
++};
++static const char* p_sc_glen_moray[] = {
++    "Glen Moray Classic", "Glen Moray 12yr", "Glen Moray 15yr",
++    "Glen Moray 18yr", "Glen Moray Sherry"
++};
++static const char* p_sc_cardhu[] = {
++    "Cardhu 12yr", "Cardhu Gold Reserve", "Cardhu 15yr"
++};
++static const char* p_sc_deanston[] = {
++    "Deanston 12yr", "Deanston 18yr", "Deanston Virgin Oak"
++};
++static const char* p_sc_tobermory[] = {
++    "Tobermory 12yr", "Tobermory 20yr", "Ledaig 10yr", "Ledaig 18yr"
++};
++static const char* p_sc_kilchoman[] = {
++    "Kilchoman Machir Bay", "Kilchoman Sanaig",
++    "Kilchoman 100% Islay", "Kilchoman Loch Gorm"
++};
++static const char* p_sc_pulteney[] = {
++    "Old Pulteney 12yr", "Old Pulteney 15yr",
++    "Old Pulteney 18yr", "Old Pulteney Huddart"
++};
++static const char* p_sc_benromach[] = {
++    "Benromach 10yr", "Benromach 15yr",
++    "Benromach Peat Smoke", "Benromach CS"
++};
++static const char* p_sc_mortlach[] = {
++    "Mortlach 12yr", "Mortlach 16yr", "Mortlach 20yr"
++};
++static const char* p_sc_glen_scotia[] = {
++    "Glen Scotia 15yr", "Glen Scotia 18yr", "Glen Scotia 25yr",
++    "Glen Scotia Victoriana", "Glen Scotia Dbl Cask"
++};
++static const char* p_sc_tomintoul[] = {
++    "Tomintoul 10yr", "Tomintoul 14yr", "Tomintoul 16yr",
++    "Tomintoul Peaty Tang"
++};
++static const char* p_sc_royal_brackla[] = {
++    "Royal Brackla 12yr", "Royal Brackla 16yr", "Royal Brackla 21yr"
++};
++static const char* p_sc_speyburn[] = {
++    "Speyburn 10yr", "Speyburn 15yr", "Speyburn 18yr"
++};
++static const char* p_sc_ancnoc[] = {
++    "anCnoc 12yr", "anCnoc 18yr", "anCnoc 24yr", "anCnoc Peatheart"
++};
++static const char* p_sc_balblair[] = {
++    "Balblair 12yr", "Balblair 15yr", "Balblair 18yr", "Balblair 25yr"
++};
++static const char* p_sc_glencadam[] = {
++    "Glencadam 10yr", "Glencadam 13yr", "Glencadam 15yr",
++    "Glencadam 21yr"
++};
++static const char* p_sc_aberfeldy[] = {
++    "Aberfeldy 12yr", "Aberfeldy 16yr", "Aberfeldy 21yr"
+ };
+ 
+ static const WhiskeyDistillery d_scotch_sm[] = {
+@@ -869,70 +611,43 @@ static const WhiskeyDistillery d_scotch_sm[] = {
+ // SCOTCH — BLENDED
+ // ============================================================
+ 
+-static const LibraryEntry p_sb_jw[] = {
+-    {"JW Red Label",         80,  1, 0},
+-    {"JW Black Label",       80,  2, 12},
+-    {"JW Double Black",      80,  2, 0},
+-    {"JW Green Label",       86,  3, 15},
+-    {"JW Gold Label Res",    80,  3, 0},
+-    {"JW Blue Label",        80,  4, 0},
+-    {"JW 18yr",              80,  4, 18},
+-};
+-static const LibraryEntry p_sb_chivas[] = {
+-    {"Chivas 12yr",          80,  2, 12},
+-    {"Chivas 18yr",          80,  3, 18},
+-    {"Chivas 25yr",          80,  4, 25},
+-    {"Chivas XV",            80,  2, 15},
+-    {"Chivas Mizunara",      80,  3, 0},
+-    {"Chivas Extra 13yr",    80,  2, 13},
+-};
+-static const LibraryEntry p_sb_dewars[] = {
+-    {"Dewar's White Label",  80,  1, 0},
+-    {"Dewar's 12yr",         80,  2, 12},
+-    {"Dewar's 15yr",         80,  2, 15},
+-    {"Dewar's 18yr",         80,  3, 18},
+-    {"Dewar's 25yr",         80,  4, 25},
+-    {"Dewar's Caribbean",    80,  2, 0},
+-};
+-static const LibraryEntry p_sb_monkey[] = {
+-    {"Monkey Shoulder",      86,  2, 0},
+-    {"Smokey Monkey",        80,  2, 0},
+-};
+-static const LibraryEntry p_sb_compass[] = {
+-    {"CB Oak Cross",         86,  3, 0},
+-    {"CB Spice Tree",        92,  3, 0},
+-    {"CB Peat Monster",      92,  3, 0},
+-    {"CB Hedonism",          86,  4, 0},
+-    {"CB Great King",        86,  2, 0},
+-    {"CB Glasgow",           80,  2, 0},
+-};
+-static const LibraryEntry p_sb_grouse[] = {
+-    {"Famous Grouse",        80,  1, 0},
+-    {"Famous Grouse Smoky",  80,  1, 0},
+-    {"Naked Malt",           80,  2, 0},
+-};
+-static const LibraryEntry p_sb_ballantines[] = {
+-    {"Ballantine's Finest",  80,  1, 0},
+-    {"Ballantine's 12yr",    80,  2, 12},
+-    {"Ballantine's 17yr",    80,  3, 17},
+-    {"Ballantine's 21yr",    86,  4, 21},
+-};
+-static const LibraryEntry p_sb_cutty[] = {
+-    {"Cutty Sark Original",  80,  1, 0},
+-    {"Cutty Sark Prohib",   100,  2, 0},
+-};
+-static const LibraryEntry p_sb_grants[] = {
+-    {"Grant's Triple Wood",  80,  1, 0},
+-    {"Grant's 12yr",         80,  2, 12},
+-    {"Grant's 18yr",         80,  3, 18},
+-};
+-static const LibraryEntry p_sb_buchanans[] = {
+-    {"Buchanan's 12yr",      80,  2, 12},
+-    {"Buchanan's 15yr",      80,  3, 15},
+-    {"Buchanan's 18yr",      80,  3, 18},
+-};
+-static const LibraryEntry p_sb_teachers[] = {
+-    {"Teacher's Highland",   80,  1, 0},
++static const char* p_sb_jw[] = {
++    "JW Red Label", "JW Black Label", "JW Double Black",
++    "JW Green Label", "JW Gold Label Res", "JW Blue Label", "JW 18yr"
++};
++static const char* p_sb_chivas[] = {
++    "Chivas 12yr", "Chivas 18yr", "Chivas 25yr",
++    "Chivas XV", "Chivas Mizunara", "Chivas Extra 13yr"
++};
++static const char* p_sb_dewars[] = {
++    "Dewar's White Label", "Dewar's 12yr", "Dewar's 15yr",
++    "Dewar's 18yr", "Dewar's 25yr", "Dewar's Caribbean"
++};
++static const char* p_sb_monkey[] = {
++    "Monkey Shoulder", "Smokey Monkey"
++};
++static const char* p_sb_compass[] = {
++    "CB Oak Cross", "CB Spice Tree", "CB Peat Monster",
++    "CB Hedonism", "CB Great King", "CB Glasgow"
++};
++static const char* p_sb_grouse[] = {
++    "Famous Grouse", "Famous Grouse Smoky", "Naked Malt"
++};
++static const char* p_sb_ballantines[] = {
++    "Ballantine's Finest", "Ballantine's 12yr",
++    "Ballantine's 17yr", "Ballantine's 21yr"
++};
++static const char* p_sb_cutty[] = {
++    "Cutty Sark Original", "Cutty Sark Prohib"
++};
++static const char* p_sb_grants[] = {
++    "Grant's Triple Wood", "Grant's 12yr", "Grant's 18yr"
++};
++static const char* p_sb_buchanans[] = {
++    "Buchanan's 12yr", "Buchanan's 15yr", "Buchanan's 18yr"
++};
++static const char* p_sb_teachers[] = {
++    "Teacher's Highland"
+ };
+ 
+ static const WhiskeyDistillery d_scotch_bl[] = {
+@@ -953,97 +668,62 @@ static const WhiskeyDistillery d_scotch_bl[] = {
+ // IRISH WHISKEY
+ // ============================================================
+ 
+-static const LibraryEntry p_ir_midleton[] = {
+-    {"Jameson Original",     80,  1, 0},
+-    {"Jameson Black Barrel", 80,  2, 0},
+-    {"Jameson 18yr",         80,  3, 18},
+-    {"Redbreast 12yr",       80,  3, 12},
+-    {"Redbreast 12 CS",       0,  3, 12},
+-    {"Redbreast 15yr",       92,  4, 15},
+-    {"Redbreast 21yr",       92,  4, 21},
+-    {"Redbreast Lustau",     92,  3, 0},
+-    {"Green Spot",           80,  3, 0},
+-    {"Yellow Spot",          92,  3, 12},
+-    {"Blue Spot",             0,  4, 7},
+-    {"Red Spot",              0,  4, 15},
+-    {"Powers Gold Label",    86,  1, 0},
+-    {"Powers John's Lane",   92,  3, 12},
+-    {"Midleton Very Rare",   80,  4, 0},
+-    {"Method & Madness",     92,  3, 0},
+-};
+-static const LibraryEntry p_ir_bushmills[] = {
+-    {"Bushmills Original",   80,  1, 0},
+-    {"Black Bush",           80,  2, 0},
+-    {"Bushmills 10yr",       80,  2, 10},
+-    {"Bushmills 12yr",       80,  2, 12},
+-    {"Bushmills 16yr",       80,  3, 16},
+-    {"Bushmills 21yr",       80,  4, 21},
+-};
+-static const LibraryEntry p_ir_tullamore[] = {
+-    {"Tullamore D.E.W.",     80,  1, 0},
+-    {"Tullamore 12yr",       80,  2, 12},
+-    {"Tullamore 14yr SM",    82,  3, 14},
+-    {"Tullamore 18yr SM",    82,  4, 18},
+-    {"Tullamore XO",         86,  2, 0},
+-};
+-static const LibraryEntry p_ir_teeling[] = {
+-    {"Teeling Small Batch",  92,  2, 0},
+-    {"Teeling Single Grain", 92,  2, 0},
+-    {"Teeling Single Malt",  92,  3, 0},
+-    {"Teeling Single Pot",   92,  3, 0},
+-    {"Teeling Blackpitts",   92,  3, 0},
+-};
+-static const LibraryEntry p_ir_dingle[] = {
+-    {"Dingle Single Malt",    0,  3, 0},
+-    {"Dingle Single Pot",     0,  3, 0},
+-};
+-static const LibraryEntry p_ir_kilbeggan[] = {
+-    {"Kilbeggan Original",   80,  1, 0},
+-    {"Kilbeggan SiG",        86,  2, 0},
+-    {"Kilbeggan SiM",         0,  2, 0},
+-};
+-static const LibraryEntry p_ir_connemara[] = {
+-    {"Connemara Original",   80,  2, 0},
+-    {"Connemara 12yr",       80,  3, 12},
+-    {"Connemara Cask Str",    0,  3, 0},
+-    {"Connemara Turf Mor",   92,  3, 0},
+-};
+-static const LibraryEntry p_ir_tyrconnell[] = {
+-    {"Tyrconnell SiM",       80,  2, 0},
+-    {"Tyrconnell 10 Sherry", 92,  3, 10},
+-    {"Tyrconnell 10 Port",   92,  3, 10},
+-    {"Tyrconnell 16yr",      92,  4, 16},
+-};
+-static const LibraryEntry p_ir_west_cork[] = {
+-    {"West Cork Original",    0,  1, 0},
+-    {"West Cork 8yr",         0,  2, 8},
+-    {"West Cork 10yr",        0,  2, 10},
+-    {"West Cork 12yr",        0,  2, 12},
+-    {"West Cork Bog Oak",     0,  2, 0},
+-    {"West Cork CS",          0,  2, 0},
+-};
+-static const LibraryEntry p_ir_glendalough[] = {
+-    {"Glendalough Double",    0,  2, 0},
+-    {"Glendalough 7yr",       0,  2, 7},
+-    {"Glendalough 13yr",      0,  3, 13},
+-    {"Glendalough Pot Stl",   0,  2, 0},
+-};
+-static const LibraryEntry p_ir_writers[] = {
+-    {"Writers' Tears Cppr",  80,  2, 0},
+-    {"Writers' Tears DblOk", 80,  3, 0},
+-    {"Writers' Tears CS",     0,  3, 0},
+-};
+-static const LibraryEntry p_ir_proper12[] = {
+-    {"Proper No. Twelve",    80,  1, 0},
+-};
+-static const LibraryEntry p_ir_knappogue[] = {
+-    {"Knappogue 12yr",       80,  2, 12},
+-    {"Knappogue 14yr",       92,  3, 14},
+-    {"Knappogue 16yr",       80,  3, 16},
+-};
+-static const LibraryEntry p_ir_keepers[] = {
+-    {"Keeper's Heart Irish",  0,  2, 0},
+-    {"Keeper's Heart Rye",    0,  2, 0},
++static const char* p_ir_midleton[] = {
++    "Jameson Original", "Jameson Black Barrel", "Jameson 18yr",
++    "Redbreast 12yr", "Redbreast 12 CS", "Redbreast 15yr",
++    "Redbreast 21yr", "Redbreast Lustau",
++    "Green Spot", "Yellow Spot", "Blue Spot", "Red Spot",
++    "Powers Gold Label", "Powers John's Lane",
++    "Midleton Very Rare", "Method & Madness"
++};
++static const char* p_ir_bushmills[] = {
++    "Bushmills Original", "Black Bush",
++    "Bushmills 10yr", "Bushmills 12yr",
++    "Bushmills 16yr", "Bushmills 21yr"
++};
++static const char* p_ir_tullamore[] = {
++    "Tullamore D.E.W.", "Tullamore 12yr",
++    "Tullamore 14yr SM", "Tullamore 18yr SM", "Tullamore XO"
++};
++static const char* p_ir_teeling[] = {
++    "Teeling Small Batch", "Teeling Single Grain",
++    "Teeling Single Malt", "Teeling Single Pot",
++    "Teeling Blackpitts"
++};
++static const char* p_ir_dingle[] = {
++    "Dingle Single Malt", "Dingle Single Pot"
++};
++static const char* p_ir_kilbeggan[] = {
++    "Kilbeggan Original", "Kilbeggan SiG", "Kilbeggan SiM"
++};
++static const char* p_ir_connemara[] = {
++    "Connemara Original", "Connemara 12yr",
++    "Connemara Cask Str", "Connemara Turf Mor"
++};
++static const char* p_ir_tyrconnell[] = {
++    "Tyrconnell SiM", "Tyrconnell 10 Sherry",
++    "Tyrconnell 10 Port", "Tyrconnell 16yr"
++};
++static const char* p_ir_west_cork[] = {
++    "West Cork Original", "West Cork 8yr", "West Cork 10yr",
++    "West Cork 12yr", "West Cork Bog Oak", "West Cork CS"
++};
++static const char* p_ir_glendalough[] = {
++    "Glendalough Double", "Glendalough 7yr",
++    "Glendalough 13yr", "Glendalough Pot Stl"
++};
++static const char* p_ir_writers[] = {
++    "Writers' Tears Cppr", "Writers' Tears DblOk",
++    "Writers' Tears CS"
++};
++static const char* p_ir_proper12[] = {
++    "Proper No. Twelve"
++};
++static const char* p_ir_knappogue[] = {
++    "Knappogue 12yr", "Knappogue 14yr", "Knappogue 16yr"
++};
++static const char* p_ir_keepers[] = {
++    "Keeper's Heart Irish", "Keeper's Heart Rye"
+ };
+ 
+ static const WhiskeyDistillery d_irish[] = {
+@@ -1067,89 +747,60 @@ static const WhiskeyDistillery d_irish[] = {
+ // JAPANESE WHISKY
+ // ============================================================
+ 
+-static const LibraryEntry p_jp_yamazaki[] = {
+-    {"Yamazaki 12yr",        86,  4, 12},
+-    {"Yamazaki 18yr",        86,  4, 18},
+-    {"Yamazaki 25yr",        86,  4, 25},
+-    {"Yamazaki Distiller's", 86,  3, 0},
+-};
+-static const LibraryEntry p_jp_hakushu[] = {
+-    {"Hakushu 12yr",         86,  4, 12},
+-    {"Hakushu 18yr",         86,  4, 18},
+-    {"Hakushu 25yr",         86,  4, 25},
+-    {"Hakushu Distiller's",  86,  3, 0},
+-};
+-static const LibraryEntry p_jp_hibiki[] = {
+-    {"Hibiki Harmony",       86,  3, 0},
+-    {"Hibiki 17yr",          86,  4, 17},
+-    {"Hibiki 21yr",          86,  4, 21},
+-    {"Hibiki 30yr",          86,  4, 30},
+-    {"Hibiki Blender's Ch",  86,  4, 0},
+-};
+-static const LibraryEntry p_jp_suntory_other[] = {
+-    {"Suntory Toki",         86,  2, 0},
+-    {"The Chita SiG",        86,  3, 0},
+-};
+-static const LibraryEntry p_jp_yoichi[] = {
+-    {"Yoichi Single Malt",   90,  3, 0},
+-    {"Yoichi 10yr",          90,  4, 10},
+-    {"Yoichi 15yr",          90,  4, 15},
+-};
+-static const LibraryEntry p_jp_miyagikyo[] = {
+-    {"Miyagikyo SiM",        90,  3, 0},
+-    {"Miyagikyo 12yr",       90,  4, 12},
+-    {"Miyagikyo 15yr",       90,  4, 15},
+-};
+-static const LibraryEntry p_jp_nikka_other[] = {
+-    {"Nikka From Barrel",   102,  3, 0},
+-    {"Nikka Coffey Grain",   90,  3, 0},
+-    {"Nikka Coffey Malt",    90,  3, 0},
+-    {"Nikka Taketsuru",      86,  3, 0},
+-    {"Nikka Days",           80,  2, 0},
+-    {"Nikka Session",        86,  2, 0},
+-};
+-static const LibraryEntry p_jp_mars[] = {
+-    {"Mars Iwai Tradition",  80,  2, 0},
+-    {"Mars Iwai 45",         90,  2, 0},
+-    {"Mars Komagatake",       0,  3, 0},
+-    {"Mars Cosmo",            0,  2, 0},
+-};
+-static const LibraryEntry p_jp_chichibu[] = {
+-    {"Ichiro's Malt&Grain",  92,  3, 0},
+-    {"Ichiro's Malt Double", 92,  4, 0},
+-    {"Ichiro's Chichibu",     0,  4, 0},
+-};
+-static const LibraryEntry p_jp_akkeshi[] = {
+-    {"Akkeshi Peated SiM",    0,  4, 0},
+-    {"Akkeshi Blended",       0,  4, 0},
+-};
+-static const LibraryEntry p_jp_white_oak[] = {
+-    {"Akashi White Oak",     80,  2, 0},
+-    {"Akashi Single Malt",    0,  3, 0},
+-    {"Akashi Sherry Cask",    0,  3, 0},
+-};
+-static const LibraryEntry p_jp_kaiyo[] = {
+-    {"Kaiyo Whisky",         86,  2, 0},
+-    {"Kaiyo Peated",         92,  2, 0},
+-    {"Kaiyo Cask Strength",   0,  3, 0},
+-    {"Kaiyo The Single 7yr", 96,  3, 7},
+-};
+-static const LibraryEntry p_jp_kurayoshi[] = {
+-    {"Kurayoshi Pure Malt",  86,  2, 0},
+-    {"Kurayoshi 8yr",        86,  3, 8},
+-    {"Kurayoshi 12yr",       86,  3, 12},
+-    {"Kurayoshi 18yr",       86,  4, 18},
+-};
+-static const LibraryEntry p_jp_ohishi[] = {
+-    {"Ohishi Sherry Cask",    0,  3, 0},
+-    {"Ohishi Brandy Cask",    0,  3, 0},
+-    {"Ohishi Sakura Cask",    0,  3, 0},
+-};
+-static const LibraryEntry p_jp_togouchi[] = {
+-    {"Togouchi Premium",     80,  2, 0},
+-    {"Togouchi 9yr",         80,  3, 9},
+-    {"Togouchi 15yr",        86,  3, 15},
+-    {"Togouchi Peated",      80,  2, 0},
++static const char* p_jp_yamazaki[] = {
++    "Yamazaki 12yr", "Yamazaki 18yr", "Yamazaki 25yr",
++    "Yamazaki Distiller's"
++};
++static const char* p_jp_hakushu[] = {
++    "Hakushu 12yr", "Hakushu 18yr", "Hakushu 25yr",
++    "Hakushu Distiller's"
++};
++static const char* p_jp_hibiki[] = {
++    "Hibiki Harmony", "Hibiki 17yr", "Hibiki 21yr",
++    "Hibiki 30yr", "Hibiki Blender's Ch"
++};
++static const char* p_jp_suntory_other[] = {
++    "Suntory Toki", "The Chita SiG"
++};
++static const char* p_jp_yoichi[] = {
++    "Yoichi Single Malt", "Yoichi 10yr", "Yoichi 15yr"
++};
++static const char* p_jp_miyagikyo[] = {
++    "Miyagikyo SiM", "Miyagikyo 12yr", "Miyagikyo 15yr"
++};
++static const char* p_jp_nikka_other[] = {
++    "Nikka From Barrel", "Nikka Coffey Grain",
++    "Nikka Coffey Malt", "Nikka Taketsuru",
++    "Nikka Days", "Nikka Session"
++};
++static const char* p_jp_mars[] = {
++    "Mars Iwai Tradition", "Mars Iwai 45",
++    "Mars Komagatake", "Mars Cosmo"
++};
++static const char* p_jp_chichibu[] = {
++    "Ichiro's Malt&Grain", "Ichiro's Malt Double",
++    "Ichiro's Chichibu"
++};
++static const char* p_jp_akkeshi[] = {
++    "Akkeshi Peated SiM", "Akkeshi Blended"
++};
++static const char* p_jp_white_oak[] = {
++    "Akashi White Oak", "Akashi Single Malt", "Akashi Sherry Cask"
++};
++static const char* p_jp_kaiyo[] = {
++    "Kaiyo Whisky", "Kaiyo Peated", "Kaiyo Cask Strength",
++    "Kaiyo The Single 7yr"
++};
++static const char* p_jp_kurayoshi[] = {
++    "Kurayoshi Pure Malt", "Kurayoshi 8yr",
++    "Kurayoshi 12yr", "Kurayoshi 18yr"
++};
++static const char* p_jp_ohishi[] = {
++    "Ohishi Sherry Cask", "Ohishi Brandy Cask", "Ohishi Sakura Cask"
++};
++static const char* p_jp_togouchi[] = {
++    "Togouchi Premium", "Togouchi 9yr",
++    "Togouchi 15yr", "Togouchi Peated"
+ };
+ 
+ static const WhiskeyDistillery d_japanese[] = {
+@@ -1174,65 +825,43 @@ static const WhiskeyDistillery d_japanese[] = {
+ // CANADIAN WHISKY
+ // ============================================================
+ 
+-static const LibraryEntry p_ca_crown[] = {
+-    {"Crown Royal Deluxe",   80,  1, 0},
+-    {"Crown Royal Black",    90,  2, 0},
+-    {"Crown Royal Res",      80,  2, 0},
+-    {"Crown Royal XR",       80,  4, 0},
+-    {"Crown Royal XO",       80,  3, 0},
+-    {"Crown Royal Northern", 90,  2, 0},
+-    {"Crown Royal Peach",    70,  1, 0},
+-    {"Crown Royal Apple",    70,  1, 0},
+-};
+-static const LibraryEntry p_ca_cc[] = {
+-    {"Canadian Club 1858",   80,  1, 0},
+-    {"CC 100% Rye",          80,  1, 0},
+-    {"CC 12yr",              80,  2, 12},
+-    {"CC 20yr",              80,  3, 20},
+-};
+-static const LibraryEntry p_ca_lot40[] = {
+-    {"Lot No. 40",           86,  2, 0},
+-    {"Lot No. 40 CS",         0,  3, 0},
+-    {"Lot No. 40 Dark Oak",  86,  3, 0},
+-};
+-static const LibraryEntry p_ca_pike[] = {
+-    {"Pike Creek 10yr",      84,  2, 10},
+-    {"Pike Creek 21yr",      84,  4, 21},
+-};
+-static const LibraryEntry p_ca_wisers[] = {
+-    {"JP Wiser's Deluxe",    80,  1, 0},
+-    {"JP Wiser's 15yr",      80,  2, 15},
+-    {"JP Wiser's 18yr",      80,  3, 18},
+-    {"JP Wiser's 23yr",      80,  4, 23},
+-};
+-static const LibraryEntry p_ca_alberta[] = {
+-    {"Alberta Premium",      80,  1, 0},
+-    {"Alberta Premium CS",    0,  3, 0},
+-    {"Alberta Prem 20yr",     0,  4, 20},
+-};
+-static const LibraryEntry p_ca_forty_creek[] = {
+-    {"Forty Creek Barrel",   80,  1, 0},
+-    {"Forty Creek Conf Rsv",  0,  2, 0},
+-    {"Forty Creek Double",    0,  2, 0},
+-};
+-static const LibraryEntry p_ca_pendleton[] = {
+-    {"Pendleton Original",   80,  1, 0},
+-    {"Pendleton 1910",       80,  2, 12},
+-    {"Pendleton Midnight",   90,  2, 0},
+-};
+-static const LibraryEntry p_ca_collingwood[] = {
+-    {"Collingwood Original",  0,  2, 0},
+-    {"Collingwood 21yr",      0,  3, 21},
+-    {"Collingwood Toasted",   0,  2, 0},
+-};
+-static const LibraryEntry p_ca_glen_breton[] = {
+-    {"Glen Breton Rare 10",  80,  3, 10},
+-    {"Glen Breton Ice 10",   80,  3, 10},
+-    {"Glen Breton 14yr",      0,  3, 14},
+-    {"Glen Breton 19yr",      0,  4, 19},
+-};
+-static const LibraryEntry p_ca_caribou[] = {
+-    {"Caribou Crossing SiB", 80,  3, 0},
++static const char* p_ca_crown[] = {
++    "Crown Royal Deluxe", "Crown Royal Black", "Crown Royal Res",
++    "Crown Royal XR", "Crown Royal XO", "Crown Royal Northern",
++    "Crown Royal Peach", "Crown Royal Apple"
++};
++static const char* p_ca_cc[] = {
++    "Canadian Club 1858", "CC 100% Rye", "CC 12yr", "CC 20yr"
++};
++static const char* p_ca_lot40[] = {
++    "Lot No. 40", "Lot No. 40 CS", "Lot No. 40 Dark Oak"
++};
++static const char* p_ca_pike[] = {
++    "Pike Creek 10yr", "Pike Creek 21yr"
++};
++static const char* p_ca_wisers[] = {
++    "JP Wiser's Deluxe", "JP Wiser's 15yr",
++    "JP Wiser's 18yr", "JP Wiser's 23yr"
++};
++static const char* p_ca_alberta[] = {
++    "Alberta Premium", "Alberta Premium CS", "Alberta Prem 20yr"
++};
++static const char* p_ca_forty_creek[] = {
++    "Forty Creek Barrel", "Forty Creek Conf Rsv",
++    "Forty Creek Double"
++};
++static const char* p_ca_pendleton[] = {
++    "Pendleton Original", "Pendleton 1910", "Pendleton Midnight"
++};
++static const char* p_ca_collingwood[] = {
++    "Collingwood Original", "Collingwood 21yr", "Collingwood Toasted"
++};
++static const char* p_ca_glen_breton[] = {
++    "Glen Breton Rare 10", "Glen Breton Ice 10",
++    "Glen Breton 14yr", "Glen Breton 19yr"
++};
++static const char* p_ca_caribou[] = {
++    "Caribou Crossing SiB"
+ };
+ 
+ static const WhiskeyDistillery d_canadian[] = {
+@@ -1253,63 +882,44 @@ static const WhiskeyDistillery d_canadian[] = {
+ // WORLD / OTHER WHISKY
+ // ============================================================
+ 
+-static const LibraryEntry p_wo_kavalan[] = {
+-    {"Kavalan Classic",      80,  3, 0},
+-    {"Kavalan Concertmastr", 80,  3, 0},
+-    {"Kavalan Ex-Bourbon",   92,  3, 0},
+-    {"Kavalan Solist Shrry",  0,  4, 0},
+-    {"Kavalan Solist Brbn",   0,  4, 0},
+-};
+-static const LibraryEntry p_wo_amrut[] = {
+-    {"Amrut Single Malt",    92,  2, 0},
+-    {"Amrut Fusion",         100, 3, 0},
+-    {"Amrut Peated",         92,  3, 0},
+-    {"Amrut Cask Strength",   0,  3, 0},
+-    {"Amrut Portonova",     124,  3, 0},
+-};
+-static const LibraryEntry p_wo_paul_john[] = {
+-    {"Paul John Brilliance", 92,  2, 0},
+-    {"Paul John Edited",     92,  2, 0},
+-    {"Paul John Bold",      92,  3, 0},
+-    {"Paul John Classic",    0,  2, 0},
+-    {"Paul John Peated",    110,  3, 0},
+-};
+-static const LibraryEntry p_wo_starward[] = {
+-    {"Starward Nova",        82,  2, 0},
+-    {"Starward Solera",      86,  3, 0},
+-    {"Starward Two-Fold",    80,  2, 0},
+-    {"Starward Fortis",     100,  3, 0},
+-    {"Starward Left-Field",  80,  2, 0},
+-};
+-static const LibraryEntry p_wo_westward[] = {
+-    {"Westward American SM", 90,  3, 0},
+-    {"Westward Stout Cask",  90,  3, 0},
+-    {"Westward Pinot Noir",  90,  3, 0},
+-    {"Westward Cask Str",     0,  4, 0},
+-};
+-static const LibraryEntry p_wo_westland[] = {
+-    {"Westland American SM", 92,  3, 0},
+-    {"Westland Sherry Wood", 92,  3, 0},
+-    {"Westland Peated",      92,  3, 0},
+-    {"Westland Garryana",     0,  4, 0},
+-};
+-static const LibraryEntry p_wo_stranahans[] = {
+-    {"Stranahan's Original", 94,  3, 0},
+-    {"Stranahan's Blue Peak",86,  2, 0},
+-    {"Stranahan's Sherry",   94,  3, 0},
+-};
+-static const LibraryEntry p_wo_balcones[] = {
+-    {"Balcones Texas SiM",    0,  3, 0},
+-    {"Balcones Baby Blue",   92,  2, 0},
+-    {"Balcones True Blue",    0,  3, 0},
+-    {"Balcones Brimstone",   106, 3, 0},
+-    {"Balcones Lineage",      0,  2, 0},
+-};
+-static const LibraryEntry p_wo_virginia[] = {
+-    {"Courage & Conviction", 92,  3, 0},
+-    {"C&C Cask Strength",     0,  4, 0},
+-    {"C&C Sherry Cask",      92,  3, 0},
+-    {"C&C Bourbon Cask",     92,  3, 0},
++static const char* p_wo_kavalan[] = {
++    "Kavalan Classic", "Kavalan Concertmastr",
++    "Kavalan Ex-Bourbon", "Kavalan Solist Shrry",
++    "Kavalan Solist Brbn"
++};
++static const char* p_wo_amrut[] = {
++    "Amrut Single Malt", "Amrut Fusion", "Amrut Peated",
++    "Amrut Cask Strength", "Amrut Portonova"
++};
++static const char* p_wo_paul_john[] = {
++    "Paul John Brilliance", "Paul John Edited",
++    "Paul John Bold", "Paul John Classic",
++    "Paul John Peated"
++};
++static const char* p_wo_starward[] = {
++    "Starward Nova", "Starward Solera", "Starward Two-Fold",
++    "Starward Fortis", "Starward Left-Field"
++};
++static const char* p_wo_westward[] = {
++    "Westward American SM", "Westward Stout Cask",
++    "Westward Pinot Noir", "Westward Cask Str"
++};
++static const char* p_wo_westland[] = {
++    "Westland American SM", "Westland Sherry Wood",
++    "Westland Peated", "Westland Garryana"
++};
++static const char* p_wo_stranahans[] = {
++    "Stranahan's Original", "Stranahan's Blue Peak",
++    "Stranahan's Sherry"
++};
++static const char* p_wo_balcones[] = {
++    "Balcones Texas SiM", "Balcones Baby Blue",
++    "Balcones True Blue", "Balcones Brimstone",
++    "Balcones Lineage"
++};
++static const char* p_wo_virginia[] = {
++    "Courage & Conviction", "C&C Cask Strength",
++    "C&C Sherry Cask", "C&C Bourbon Cask"
+ };
+ 
+ static const WhiskeyDistillery d_world[] = {
+diff --git b/Blind-Flight/src/categories.h a/Blind-Flight/src/categories.h
+index a576c1f..78863ff 100644
+--- b/Blind-Flight/src/categories.h
++++ a/Blind-Flight/src/categories.h
+@@ -1,15 +1,12 @@
+ #pragma once
+ 
+ // ============================================================
+-// Blind Flight — Whiskey Category Data (Session 12, updated Session 21)
++// Blind Flight — Whiskey Category Data (Session 12)
+ // ============================================================
+ // Three-level hierarchy: Type → Distillery → Product
+ // All strings stored as const in flash (ESP32 stores const
+ // string literals in flash automatically).
+ //
+-// Session 21: Products are now LibraryEntry structs with
+-// optional metadata (proof, price tier, age statement).
+-//
+ // The browse UI allows the user to "USE THIS" at any level:
+ //   - Type level: glass labeled "Bourbon"
+ //   - Distillery level: glass labeled "Buffalo Trace"
+@@ -20,17 +17,10 @@
+ 
+ // --- Data structures ---
+ 
+-struct LibraryEntry {
+-    const char* name;
+-    uint8_t proof;      // 0 = unknown
+-    uint8_t priceTier;  // 0 = unknown, 1-4 = $..$$$$
+-    uint8_t ageYears;   // 0 = NAS/unknown
+-};
+-
+ struct WhiskeyDistillery {
+-    const char*          name;
+-    const LibraryEntry*  products;
+-    int                  productCount;
++    const char*  name;
++    const char** products;      // Array of product name strings
++    int          productCount;
+ };
+ 
+ struct WhiskeyType {
+diff --git b/Blind-Flight/src/config.h a/Blind-Flight/src/config.h
+index 4425f29..424473f 100644
+--- b/Blind-Flight/src/config.h
++++ a/Blind-Flight/src/config.h
+@@ -119,11 +119,6 @@
+ #define DEFAULT_DIM_DELAY   120     // 2 minutes idle → dim to 25%
+ #define DEFAULT_OFF_DELAY   600     // 10 minutes idle → backlight off
+ 
+-// --- Rating ---
+-#define RATING_MAX          5       // Maximum star rating (1-5)
+-
+-// Price tier boundaries: 1=$ (<$30), 2=$$ ($30-60), 3=$$$ ($60-120), 4=$$$$ ($120+)
+-
+ // --- Timing ---
+ #define DEBOUNCE_MS         50
+ #define LONG_PRESS_MS       600
+diff --git b/Blind-Flight/src/game.cpp a/Blind-Flight/src/game.cpp
+index 8211944..d3c8338 100644
+--- b/Blind-Flight/src/game.cpp
++++ a/Blind-Flight/src/game.cpp
+@@ -131,15 +131,12 @@ static void resetSession() {
+     session.glassCount   = settingsGetGlassCount();
+     revealMapCount       = 0;
+     session.rankIndex    = 0;
+-    session.ratingIndex  = 0;
+     for (int i = 0; i < NUM_GLASSES; i++) {
+         session.pourOrder[i] = 0;
+         session.glassUsed[i] = false;
+         session.glassName[i][0] = '\0';
+         session.guessForGlass[i] = -1;
+         session.rankOrder[i] = 0;
+-        session.glassEntry[i] = nullptr;
+-        session.glassRating[i] = 0;
+     }
+ }
+ 
+@@ -561,17 +558,16 @@ static void drawTasting(bool fullRedraw) {
+ 
+     // Mode-specific hint and button text
+     if (currentMode == GAME_MODE_GUESS) {
+-        uiDrawHint("Press to Rate &",  CONTENT_Y + 142);
+-        uiDrawHint("Guess",            CONTENT_Y + 160);
+-        uiDrawSoftButtons("", "NEXT");
++        uiDrawHint("Press to Start",  CONTENT_Y + 142);
++        uiDrawHint("Guessing",        CONTENT_Y + 160);
++        uiDrawSoftButtons("", "GUESS");
+     } else if (currentMode == GAME_MODE_RANK) {
+-        uiDrawHint("Press to Rate &",  CONTENT_Y + 142);
+-        uiDrawHint("Rank",             CONTENT_Y + 160);
+-        uiDrawSoftButtons("", "NEXT");
++        uiDrawHint("Press to Start",  CONTENT_Y + 142);
++        uiDrawHint("Ranking",         CONTENT_Y + 160);
++        uiDrawSoftButtons("", "RANK");
+     } else {
+-        uiDrawHint("Press to Rate &", CONTENT_Y + 142);
+-        uiDrawHint("Reveal",          CONTENT_Y + 160);
+-        uiDrawSoftButtons("", "NEXT");
++        uiDrawHint("Press To Reveal", CONTENT_Y + 150);
++        uiDrawSoftButtons("", "REVEAL");
+     }
+ }
+ 
+@@ -713,106 +709,6 @@ static void drawRanking(bool fullRedraw) {
+     uiDrawSoftButtons("BACK", "LOCK IN");
+ }
+ 
+-// ============================================================
+-// Rating round (Session 21)
+-// ============================================================
+-
+-static void initRating() {
+-    buildRevealMap();
+-    session.ratingIndex = 0;
+-    for (int i = 0; i < NUM_GLASSES; i++) {
+-        session.glassRating[i] = 0;
+-    }
+-    state = GAME_RATING;
+-    flushInput();
+-    uiRequestRedraw();
+-}
+-
+-static void drawRating(bool fullRedraw) {
+-    if (!fullRedraw) return;
+-
+-    TFT_eSPI* tft = uiGetTFT();
+-    tft->fillScreen(COL_BG);
+-
+-    int idx = session.ratingIndex;
+-    if (idx >= revealMapCount) return;
+-
+-    int pourIdx = revealMap[idx].pourIdx;
+-    int glass   = revealMap[idx].glass;
+-
+-    char titleBuf[20];
+-    snprintf(titleBuf, sizeof(titleBuf), "RATE GLASS %d", glass);
+-    uiDrawTitleBar(titleBuf, COL_ACCENT);
+-
+-    if (session.glassName[pourIdx][0]) {
+-        uiDrawCenteredText(session.glassName[pourIdx],
+-                           CONTENT_Y + 15, FONT_BODY, COL_TEXT);
+-    } else {
+-        char pourLabel[16];
+-        snprintf(pourLabel, sizeof(pourLabel), "Pour #%d", pourIdx + 1);
+-        uiDrawCenteredText(pourLabel, CONTENT_Y + 15, FONT_BODY, COL_TEXT);
+-    }
+-
+-    uint8_t rating = session.glassRating[pourIdx];
+-
+-    // Draw star row
+-    const int starW = 28, starGap = 8;
+-    int totalStarW = RATING_MAX * starW + (RATING_MAX - 1) * starGap;
+-    int starX0 = (SCREEN_W - totalStarW) / 2;
+-    int starY  = CONTENT_Y + 55;
+-
+-    for (int s = 0; s < RATING_MAX; s++) {
+-        int x = starX0 + s * (starW + starGap);
+-        bool filled = (s < rating);
+-        if (filled) {
+-            tft->fillRoundRect(x, starY, starW, starW, 4, COL_ACCENT);
+-            tft->setTextColor(COL_BG, COL_ACCENT);
+-        } else {
+-            tft->drawRoundRect(x, starY, starW, starW, 4, COL_DIM);
+-            tft->setTextColor(COL_DIM, COL_BG);
+-        }
+-        tft->setTextSize(FONT_BODY);
+-        tft->setTextDatum(MC_DATUM);
+-        tft->drawChar('*', x + starW / 2, starY + starW / 2);
+-    }
+-
+-    // Progress
+-    char progBuf[16];
+-    snprintf(progBuf, sizeof(progBuf), "%d of %d", idx + 1, revealMapCount);
+-    uiDrawCenteredText(progBuf, CONTENT_Y + 105, FONT_SMALL, COL_DIM);
+-
+-    uiDrawHint("Turn to rate", CONTENT_Y + 130);
+-    uiDrawHint("Click to confirm", CONTENT_Y + 148);
+-
+-    uiDrawSoftButtons("SKIP", "OK");
+-}
+-
+-// ============================================================
+-// Metadata formatting helpers (Session 21)
+-// ============================================================
+-
+-static const char* priceTierStr(uint8_t tier) {
+-    switch (tier) {
+-        case 1: return "$";
+-        case 2: return "$$";
+-        case 3: return "$$$";
+-        case 4: return "$$$$";
+-        default: return nullptr;
+-    }
+-}
+-
+-static void drawStarRow(TFT_eSPI* tft, int cx, int y, uint8_t rating) {
+-    const int starGap = 10;
+-    int totalW = (rating - 1) * starGap;
+-    int x0 = cx - totalW / 2;
+-    tft->setTextSize(FONT_SMALL);
+-    tft->setTextDatum(MC_DATUM);
+-    tft->setTextColor(COL_ACCENT, COL_BG);
+-    for (int s = 0; s < rating; s++) {
+-        tft->drawChar('*', x0 + s * starGap, y);
+-    }
+-}
+-
+ // ============================================================
+ // Reveal and Done draw functions
+ // ============================================================
+@@ -852,48 +748,17 @@ static void drawReveal(bool fullRedraw) {
+                   revealStr, COL_ACCENT, COL_BG, FONT_BODY);
+ 
+     // --- Rank or pour number below the name ---
+-    int metaY;
+     if (currentMode == GAME_MODE_RANK) {
+         int rank = revealMapCount - 1 - idx;
+         uiDrawCenteredText(ordinalRevealStr(rank), CONTENT_Y + 80, FONT_SMALL, COL_DIM);
+-        metaY = CONTENT_Y + 95;
+     } else {
+         char pourLabel[16];
+         snprintf(pourLabel, sizeof(pourLabel), "Pour #%d", pourIdx + 1);
+         uiDrawCenteredText(pourLabel, CONTENT_Y + 80, FONT_SMALL, COL_DIM);
+-        metaY = CONTENT_Y + 95;
+-    }
+-
+-    // --- Metadata line (Session 21) ---
+-    const LibraryEntry* entry = session.glassEntry[pourIdx];
+-    if (entry) {
+-        char metaBuf[32];
+-        metaBuf[0] = '\0';
+-        if (entry->proof > 0) {
+-            snprintf(metaBuf, sizeof(metaBuf), "%d proof", entry->proof);
+-        }
+-        const char* pt = priceTierStr(entry->priceTier);
+-        if (pt) {
+-            if (metaBuf[0]) strncat(metaBuf, "  ", sizeof(metaBuf) - strlen(metaBuf) - 1);
+-            strncat(metaBuf, pt, sizeof(metaBuf) - strlen(metaBuf) - 1);
+-        }
+-        if (entry->ageYears > 0) {
+-            char ageBuf[8];
+-            snprintf(ageBuf, sizeof(ageBuf), "  %dyr", entry->ageYears);
+-            strncat(metaBuf, ageBuf, sizeof(metaBuf) - strlen(metaBuf) - 1);
+-        }
+-        if (metaBuf[0]) {
+-            uiDrawCenteredText(metaBuf, metaY, FONT_SMALL, COL_DIM);
+-        }
+-    }
+-
+-    // --- Star rating (Session 21) ---
+-    if (session.glassRating[pourIdx] > 0) {
+-        drawStarRow(tft, SCREEN_W / 2, metaY + 12, session.glassRating[pourIdx]);
+     }
+ 
+     // --- Progress dots ---
+-    int dotY   = CONTENT_Y + 135;
++    int dotY   = CONTENT_Y + 115;
+     int dotR   = 6;
+     int dotGap = 24;
+     int dotsW  = (revealMapCount - 1) * dotGap;
+@@ -946,28 +811,7 @@ static void drawDone(bool fullRedraw) {
+         y += 28;
+     }
+ 
+-    // --- Top rated summary (Session 21) ---
+-    bool hasRatings = false;
+-    int topPourIdx = -1;
+-    uint8_t topRating = 0;
+-    for (int i = 0; i < revealMapCount; i++) {
+-        int pi = revealMap[i].pourIdx;
+-        if (session.glassRating[pi] > 0) hasRatings = true;
+-        if (session.glassRating[pi] > topRating) {
+-            topRating = session.glassRating[pi];
+-            topPourIdx = pi;
+-        }
+-    }
+-    if (hasRatings && topPourIdx >= 0) {
+-        char topBuf[40];
+-        const char* topName = session.glassName[topPourIdx][0]
+-            ? session.glassName[topPourIdx] : "?";
+-        snprintf(topBuf, sizeof(topBuf), "Top: %s", topName);
+-        uiDrawCenteredText(topBuf, y + 4, FONT_SMALL, COL_DIM);
+-        y += 14;
+-    }
+-
+-    uiDrawHint("New flight or exit", y + 4);
++    uiDrawHint("New flight or exit", y + 10);
+     uiDrawSoftButtons("EXIT", "NEW");
+ }
+ 
+@@ -1115,7 +959,6 @@ static void gameDraw(bool fullRedraw) {
+             strncpy(session.glassName[session.pourCount], name,
+                     MAX_GLASS_NAME - 1);
+             session.glassName[session.pourCount][MAX_GLASS_NAME - 1] = '\0';
+-            session.glassEntry[session.pourCount] = browseGetEntry();
+ 
+             Serial.printf("[Game] Named pour %d: %s\n",
+                           session.pourCount + 1,
+@@ -1142,7 +985,6 @@ static void gameDraw(bool fullRedraw) {
+         case GAME_COUNT_SELECT: drawCountSelect(fullRedraw);  break;
+         case GAME_POURING:      drawPouring(fullRedraw);      break;
+         case GAME_TASTING:      drawTasting(fullRedraw);      break;
+-        case GAME_RATING:       drawRating(fullRedraw);       break;
+         case GAME_GUESSING:     drawGuessing(fullRedraw);     break;
+         case GAME_GUESS_SCORE:  drawGuessScore(fullRedraw);   break;
+         case GAME_GUESS_DETAIL: drawGuessDetail(fullRedraw);  break;
+@@ -1224,69 +1066,22 @@ static void gameInput(InputEvent evt) {
+             if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+                 audioPlayTone(TONE_CONFIRM);
+                 if (session.pourCount > 0) {
+-                    initRating();
+-                } else {
+-                    enterGameDone();
+-                }
+-            }
+-            break;
+-
+-        // ============================================================
+-        // Rating round input handling (Session 21)
+-        // ============================================================
+-
+-        case GAME_RATING: {
+-            int pourIdx = revealMap[session.ratingIndex].pourIdx;
+-
+-            if (evt == INPUT_ENC_CW) {
+-                if (session.glassRating[pourIdx] < RATING_MAX) {
+-                    session.glassRating[pourIdx]++;
+-                    audioPlayTone(TONE_CLICK);
+-                    uiRequestRedraw();
+-                }
+-            } else if (evt == INPUT_ENC_CCW) {
+-                if (session.glassRating[pourIdx] > 0) {
+-                    session.glassRating[pourIdx]--;
+-                    audioPlayTone(TONE_CLICK);
+-                    uiRequestRedraw();
+-                }
+-            } else if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+-                audioPlayTone(TONE_CONFIRM);
+-                if (session.ratingIndex < revealMapCount - 1) {
+-                    session.ratingIndex++;
+-                    uiRequestRedraw();
+-                } else {
+-                    // Rating complete — advance to mode-specific next step
+                     if (currentMode == GAME_MODE_GUESS) {
+                         initGuessing(false);
+                     } else if (currentMode == GAME_MODE_RANK) {
+                         initRanking(false);
+                     } else {
+-                        session.revealIndex = 0;
++                        buildRevealMap();
+                         state = GAME_REVEAL;
++                        session.revealIndex = 0;
+                         flushInput();
+                         uiRequestRedraw();
+                     }
+-                }
+-            } else if (evt == INPUT_BTN_LEFT) {
+-                // SKIP — skip entire rating round
+-                audioPlayTone(TONE_SELECT);
+-                for (int i = 0; i < NUM_GLASSES; i++) {
+-                    session.glassRating[i] = 0;
+-                }
+-                if (currentMode == GAME_MODE_GUESS) {
+-                    initGuessing(false);
+-                } else if (currentMode == GAME_MODE_RANK) {
+-                    initRanking(false);
+                 } else {
+-                    session.revealIndex = 0;
+-                    state = GAME_REVEAL;
+-                    flushInput();
+-                    uiRequestRedraw();
++                    enterGameDone();
+                 }
+             }
+             break;
+-        }
+ 
+         // ============================================================
+         // Guessing round input handling (Session 13)
+@@ -1554,16 +1349,6 @@ bool gameGetGuessCorrectAt(int revealIdx) {
+     return session.guessForGlass[revealIdx] == revealMap[revealIdx].pourIdx;
+ }
+ 
+-uint8_t gameGetGlassRating(int pourIdx) {
+-    if (pourIdx < 0 || pourIdx >= NUM_GLASSES) return 0;
+-    return session.glassRating[pourIdx];
+-}
+-
+-const LibraryEntry* gameGetGlassEntry(int pourIdx) {
+-    if (pourIdx < 0 || pourIdx >= NUM_GLASSES) return nullptr;
+-    return session.glassEntry[pourIdx];
+-}
+-
+ // ============================================================
+ // Phone action handlers (Session 16)
+ // ============================================================
+@@ -1642,8 +1427,8 @@ void gameResumeSession(GameMode mode, GameState resumeState,
+     // Determine resume state — land on the appropriate interactive screen.
+     // Mid-pour interruptions resume at "next pour" since we can't know
+     // if liquid landed for the interrupted pour.
+-    if (resumeState == GAME_TASTING || resumeState == GAME_RATING ||
+-        resumeState == GAME_GUESSING || resumeState == GAME_RANKING) {
++    if (resumeState == GAME_TASTING || resumeState == GAME_GUESSING ||
++        resumeState == GAME_RANKING) {
+         state = GAME_TASTING;
+     } else if (session.pourCount >= session.glassCount) {
+         state = GAME_TASTING;
+diff --git b/Blind-Flight/src/game.h a/Blind-Flight/src/game.h
+index dd030a5..f7891c9 100644
+--- b/Blind-Flight/src/game.h
++++ a/Blind-Flight/src/game.h
+@@ -30,7 +30,6 @@
+ #include <Arduino.h>
+ #include "ui.h"
+ #include "config.h"
+-#include "categories.h"
+ 
+ // --- Game modes ---
+ enum GameMode {
+@@ -46,7 +45,6 @@ enum GameState {
+     GAME_NAMING,        // Named mode: browse screen is active (Session 12)
+     GAME_POURING,       // Interactive: waiting for user to pour and confirm
+     GAME_TASTING,       // Interactive: all poured, user tastes before reveal
+-    GAME_RATING,        // Interactive: user rating each glass 1-5 stars (Session 21)
+     GAME_GUESSING,      // Interactive: user guessing one glass at a time (Session 13)
+     GAME_GUESS_SCORE,   // Interactive: shows total correct out of total poured (Session 13)
+     GAME_GUESS_DETAIL,  // Interactive: shows checkmark/X per glass (Session 13)
+@@ -74,11 +72,6 @@ struct GameSession {
+     // --- Ranking round (Session 20) ---
+     int  rankOrder[NUM_GLASSES];                // rankOrder[slot] = glass# picked for that rank, 0 = unset
+     int  rankIndex;                             // current rank slot being picked (0 = 1st place)
+-
+-    // --- Library metadata & rating (Session 21) ---
+-    const LibraryEntry* glassEntry[NUM_GLASSES]; // library entry per pour (nullptr for manual/basic)
+-    uint8_t glassRating[NUM_GLASSES];            // star rating per pour (0 = unrated, 1-5)
+-    int     ratingIndex;                         // current glass being rated (0-based into revealMap)
+ };
+ 
+ // --- Game timing constants ---
+@@ -123,10 +116,6 @@ int       gameGetRevealIndex();
+ int       gameGetRevealGlass(int revealIdx);     // glass# at reveal position
+ int       gameGetRevealPourIdx(int revealIdx);   // pour index at reveal position
+ 
+-// Rating info (valid when state == GAME_RATING, Session 21)
+-uint8_t   gameGetGlassRating(int pourIdx);       // 0-based pour index
+-const LibraryEntry* gameGetGlassEntry(int pourIdx); // library entry or nullptr
+-
+ // Guess info (valid when state == GAME_GUESSING)
+ int       gameGetGuessGlass();                   // glass# being guessed
+ int       gameGetGuessPoolCount();

@@ -34,10 +34,8 @@ void audioInit();
 void audioUpdate();                 // Call every loop — advances sequencer
 void audioPlayTone(const Note* sequence);   // Start a tone (replaces current)
 void audioStopTone();               // Silence immediately
-bool audioIsPlaying();              // True if a sequence is active
 
 // --- Volume / Mute (Session 17) ---
 void audioSetMute(bool muted);      // Mute: audioPlayTone becomes no-op
 void audioSetVolume(uint8_t level); // 0–4 — adjusts LEDC duty after each tone
-bool audioGetMute();
 uint8_t audioGetVolume();

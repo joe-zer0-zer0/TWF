@@ -6,6 +6,11 @@
 #include "transitions.h"
 #include "browse.h"
 #include "wifi_portal.h"
+#include "screens.h"
+#include "diagnostics.h"
+#include "settings.h"
+#include "battery.h"
+#include "persist.h"
 
 // ============================================================
 // Blind Flight — Game Module (Session 10, updated Session 16)
@@ -83,6 +88,8 @@ static bool phoneNameReady    = false;
 static int  phonePendingGuess = -1;
 static bool phonePendingStart = false;
 static GameMode phoneStartMode = GAME_MODE_BASIC;
+static bool pendingResumePour = false;
+static bool homedThisFlight  = false;
 
 // ============================================================
 // Helpers
@@ -101,19 +108,26 @@ static void flushInput() {
     while (inputGetEvent() != INPUT_NONE) {}
 }
 
-// Returns true for modes that use the browse library for names
+// Returns true for modes that use the browse library for names (per-glass)
 static bool modeUsesNames() {
     return currentMode == GAME_MODE_NAMED || currentMode == GAME_MODE_GUESS
         || currentMode == GAME_MODE_RANK;
 }
 
+// Returns true for challenge modes (Duplicate/Decoy)
+static bool modeIsChallenge() {
+    return currentMode == GAME_MODE_DUPLICATE || currentMode == GAME_MODE_DECOY;
+}
+
 // Title bar text for the current mode
 static const char* getModeTitleText() {
     switch (currentMode) {
-        case GAME_MODE_NAMED: return "NAMED FLIGHT";
-        case GAME_MODE_GUESS: return "BEST GUESS";
-        case GAME_MODE_RANK:  return "RANKED FLIGHT";
-        default:              return "BASIC FLIGHT";
+        case GAME_MODE_NAMED:     return "NAMED FLIGHT";
+        case GAME_MODE_GUESS:     return "BEST GUESS";
+        case GAME_MODE_RANK:      return "RANKED FLIGHT";
+        case GAME_MODE_DUPLICATE: return "TWIN POUR";
+        case GAME_MODE_DECOY:     return "FIND THE RINGER";
+        default:                  return "QUICK FLIGHT";
     }
 }
 
@@ -122,21 +136,37 @@ static void resetSession() {
     session.currentGlass = 0;
     session.revealIndex  = 0;
     session.guessIndex   = 0;
+    session.glassCount   = settingsGetGlassCount();
     revealMapCount       = 0;
     session.rankIndex    = 0;
+    session.ratingIndex  = 0;
+    homedThisFlight      = false;
     for (int i = 0; i < NUM_GLASSES; i++) {
         session.pourOrder[i] = 0;
         session.glassUsed[i] = false;
         session.glassName[i][0] = '\0';
         session.guessForGlass[i] = -1;
         session.rankOrder[i] = 0;
+        session.glassEntry[i] = nullptr;
+        session.glassRating[i] = 0;
+        session.bottleForGlass[i] = -1;
+        session.challengePourOrder[i] = -1;
+    }
+    session.bottleCount = 0;
+    session.duplicateIdx = -1;
+    session.challengeGuess[0] = 0;
+    session.challengeGuess[1] = 0;
+    session.challengeGuessCount = 0;
+    session.challengeCorrect = false;
+    for (int i = 0; i < MAX_BOTTLES; i++) {
+        session.bottleName[i][0] = '\0';
     }
 }
 
 static int selectRandomGlass() {
     int available[NUM_GLASSES];
     int count = 0;
-    for (int i = 0; i < NUM_GLASSES; i++) {
+    for (int i = 0; i < session.glassCount; i++) {
         if (!session.glassUsed[i]) {
             available[count++] = i + 1;
         }
@@ -149,7 +179,7 @@ static int selectRandomGlass() {
 // Must be called before entering GAME_REVEAL state.
 static void buildRevealMap() {
     revealMapCount = 0;
-    for (int g = 1; g <= NUM_GLASSES; g++) {
+    for (int g = 1; g <= session.glassCount; g++) {
         if (session.glassUsed[g - 1]) {
             // Find which pour used this glass
             for (int p = 0; p < session.pourCount; p++) {
@@ -256,9 +286,11 @@ static const char* ordinalRevealStr(int rank) {
     }
 }
 
+static char rankGlassLabels[NUM_GLASSES][10];
+
 static void buildRankPool() {
     rankPoolCount = 0;
-    for (int g = 1; g <= NUM_GLASSES; g++) {
+    for (int g = 1; g <= session.glassCount; g++) {
         if (!session.glassUsed[g - 1]) continue;
         bool taken = false;
         for (int j = 0; j < session.rankIndex; j++) {
@@ -269,12 +301,9 @@ static void buildRankPool() {
         }
         if (!taken) {
             rankPoolGlass[rankPoolCount] = g;
-            for (int p = 0; p < session.pourCount; p++) {
-                if (session.pourOrder[p] == g) {
-                    rankPoolLabels[rankPoolCount] = session.glassName[p];
-                    break;
-                }
-            }
+            snprintf(rankGlassLabels[rankPoolCount], sizeof(rankGlassLabels[0]),
+                     "Glass %d", g);
+            rankPoolLabels[rankPoolCount] = rankGlassLabels[rankPoolCount];
             rankPoolCount++;
         }
     }
@@ -296,7 +325,7 @@ static void buildRankPool() {
 
 static void buildRevealMapFromRank() {
     revealMapCount = 0;
-    for (int r = session.pourCount - 1; r >= 0; r--) {
+    for (int r = 0; r < session.pourCount; r++) {
         int g = session.rankOrder[r];
         if (g <= 0) continue;
         for (int p = 0; p < session.pourCount; p++) {
@@ -325,18 +354,312 @@ static void initRanking(bool preserveRanks) {
 }
 
 // ============================================================
+// Duplicate/Decoy challenge logic (Session 22)
+// ============================================================
+
+// How many bottles does this mode need?
+static int challengeBottleTarget() {
+    return (currentMode == GAME_MODE_DUPLICATE) ? 3 : 2;
+}
+
+// Build randomized pour order for challenge modes.
+// Duplicate: 3 bottles, one gets 2 glasses, the other two get 1 each.
+// Decoy: 2 bottles, main gets 3 glasses, ringer gets 1.
+// Fills challengePourOrder[0..3] with bottle indices and assigns
+// random glass positions via glassUsed/pourOrder.
+static void buildChallengePourOrder() {
+    session.glassCount = NUM_GLASSES;
+
+    if (currentMode == GAME_MODE_DUPLICATE) {
+        // Pick which bottle to duplicate (0, 1, or 2)
+        session.duplicateIdx = random(3);
+
+        // Build a 4-element array of bottle indices
+        int pours[4];
+        int idx = 0;
+        for (int b = 0; b < 3; b++) {
+            pours[idx++] = b;
+            if (b == session.duplicateIdx) {
+                pours[idx++] = b;  // duplicated
+            }
+        }
+
+        // Fisher-Yates shuffle
+        for (int i = 3; i > 0; i--) {
+            int j = random(i + 1);
+            int tmp = pours[i]; pours[i] = pours[j]; pours[j] = tmp;
+        }
+        for (int i = 0; i < 4; i++) {
+            session.challengePourOrder[i] = pours[i];
+        }
+
+    } else {
+        // Decoy: bottle 0 = main (3 glasses), bottle 1 = ringer (1 glass)
+        int pours[4] = {0, 0, 0, 1};
+
+        for (int i = 3; i > 0; i--) {
+            int j = random(i + 1);
+            int tmp = pours[i]; pours[i] = pours[j]; pours[j] = tmp;
+        }
+        for (int i = 0; i < 4; i++) {
+            session.challengePourOrder[i] = pours[i];
+        }
+    }
+
+    // Assign random glass positions for each pour
+    int glassPool[4] = {1, 2, 3, 4};
+    for (int i = 3; i > 0; i--) {
+        int j = random(i + 1);
+        int tmp = glassPool[i]; glassPool[i] = glassPool[j]; glassPool[j] = tmp;
+    }
+
+    for (int i = 0; i < 4; i++) {
+        session.pourOrder[i] = glassPool[i];
+        session.bottleForGlass[glassPool[i] - 1] = session.challengePourOrder[i];
+    }
+}
+
+// Check if the user's challenge guess is correct
+static bool checkChallengeGuess() {
+    if (currentMode == GAME_MODE_DUPLICATE) {
+        // User selected two glasses — check if both contain the duplicated bottle
+        int g1 = session.challengeGuess[0] - 1;
+        int g2 = session.challengeGuess[1] - 1;
+        return (session.bottleForGlass[g1] == session.duplicateIdx &&
+                session.bottleForGlass[g2] == session.duplicateIdx);
+    } else {
+        // Decoy: user selected one glass — check if it's the ringer (bottle 1)
+        int g = session.challengeGuess[0] - 1;
+        return (session.bottleForGlass[g] == 1);
+    }
+}
+
+// ============================================================
+// Challenge mode draw functions (Session 22)
+// ============================================================
+
+static void drawBottleSelect(bool fullRedraw) {
+    if (!fullRedraw) return;
+
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+    uiDrawTitleBar(getModeTitleText(), COL_ACCENT);
+
+    int target = challengeBottleTarget();
+    char progBuf[24];
+    snprintf(progBuf, sizeof(progBuf), "Select Bottle %d of %d",
+             session.bottleCount + 1, target);
+    uiDrawCenteredText(progBuf, CONTENT_Y + 20, FONT_BODY, COL_TEXT);
+
+    if (currentMode == GAME_MODE_DECOY && session.bottleCount == 0) {
+        uiDrawHint("This is the MAIN bottle", CONTENT_Y + 50);
+        uiDrawHint("(poured into 3 glasses)", CONTENT_Y + 68);
+    } else if (currentMode == GAME_MODE_DECOY && session.bottleCount == 1) {
+        uiDrawHint("This is the RINGER", CONTENT_Y + 50);
+        uiDrawHint("(poured into 1 glass)", CONTENT_Y + 68);
+    }
+
+    // Show already-selected bottles
+    int y = CONTENT_Y + 95;
+    for (int i = 0; i < session.bottleCount; i++) {
+        char label[30];
+        snprintf(label, sizeof(label), "%d: %s", i + 1, session.bottleName[i]);
+        tft->setTextColor(COL_DIM, COL_BG);
+        tft->setTextSize(FONT_SMALL);
+        tft->setTextDatum(ML_DATUM);
+        tft->drawString(label, 16, y);
+        y += 16;
+    }
+
+    uiDrawHint("Press to browse library", CONTENT_Y + 150);
+    uiDrawSoftButtons("BACK", "BROWSE");
+}
+
+static void drawChallengePouring(bool fullRedraw) {
+    if (!fullRedraw) return;
+
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+    uiDrawTitleBar("POUR", COL_SELECTED);
+
+    // Show which bottle to pour (by name), not which glass
+    int bottleIdx = session.challengePourOrder[session.pourCount];
+    const char* bottleName = session.bottleName[bottleIdx];
+
+    char pourCounter[16];
+    snprintf(pourCounter, sizeof(pourCounter), "Pour %d of 4", session.pourCount + 1);
+    uiDrawCenteredText(pourCounter, CONTENT_Y + 15, FONT_BODY, COL_DIM);
+
+    uiDrawCenteredTextWrap(bottleName, CONTENT_Y + 55, FONT_BODY, COL_ACCENT);
+
+    uiDrawCenteredText("Ready To Pour", CONTENT_Y + 100, FONT_BODY, COL_TEXT);
+
+    uiDrawHint("DONE When Poured", CONTENT_Y + 135);
+    uiDrawHint("SKIP To End Flight", CONTENT_Y + 155);
+
+    uiDrawSoftButtons("SKIP", "DONE");
+}
+
+static void drawChallengeGuess(bool fullRedraw) {
+    if (!fullRedraw) return;
+
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+
+    if (currentMode == GAME_MODE_DUPLICATE) {
+        uiDrawTitleBar("FIND THE PAIR", COL_ACCENT);
+        uiDrawCenteredText("Which two glasses", CONTENT_Y + 8, FONT_BODY, COL_TEXT);
+        uiDrawCenteredText("are the same?", CONTENT_Y + 28, FONT_BODY, COL_TEXT);
+    } else {
+        uiDrawTitleBar("FIND THE RINGER", COL_ACCENT);
+        uiDrawCenteredText("Which glass is", CONTENT_Y + 8, FONT_BODY, COL_TEXT);
+        uiDrawCenteredText("the odd one out?", CONTENT_Y + 28, FONT_BODY, COL_TEXT);
+    }
+
+    // Draw 4 glass boxes — highlight selected ones
+    const int boxW = 44, boxH = 44, gap = 10;
+    int totalW = 4 * boxW + 3 * gap;
+    int startX = (SCREEN_W - totalW) / 2;
+    int boxY = CONTENT_Y + 60;
+
+    for (int i = 0; i < 4; i++) {
+        int x = startX + i * (boxW + gap);
+        int glassNum = i + 1;
+
+        bool selected = false;
+        for (int s = 0; s < session.challengeGuessCount; s++) {
+            if (session.challengeGuess[s] == glassNum) selected = true;
+        }
+
+        bool isCursor = (glassNum == session.currentGlass);
+
+        uint16_t boxCol = COL_DIM;
+        uint16_t txtCol = COL_TEXT;
+        if (selected) {
+            boxCol = COL_ACCENT;
+            txtCol = COL_BG;
+        } else if (isCursor) {
+            boxCol = COL_HIGHLIGHT;
+            txtCol = COL_TEXT;
+        }
+
+        tft->fillRoundRect(x, boxY, boxW, boxH, 6, boxCol);
+        tft->setTextColor(txtCol, boxCol);
+        tft->setTextSize(3);
+        tft->setTextDatum(MC_DATUM);
+        tft->drawString(String(glassNum), x + boxW / 2, boxY + boxH / 2);
+    }
+
+    // Hint text
+    if (currentMode == GAME_MODE_DUPLICATE) {
+        char hintBuf[24];
+        snprintf(hintBuf, sizeof(hintBuf), "Selected: %d of 2", session.challengeGuessCount);
+        uiDrawCenteredText(hintBuf, CONTENT_Y + 120, FONT_SMALL, COL_DIM);
+    }
+
+    uiDrawHint("Turn to move, click to select", CONTENT_Y + 145);
+    uiDrawSoftButtons("BACK", "CONFIRM");
+}
+
+static void drawChallengeResult(bool fullRedraw) {
+    if (!fullRedraw) return;
+
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+
+    if (session.challengeCorrect) {
+        uiDrawTitleBar("CORRECT!", COL_SELECTED);
+        uiDrawCenteredText("Nice", CONTENT_Y + 40, FONT_XLARGE, COL_SELECTED);
+        uiDrawCenteredText("palate!", CONTENT_Y + 90, FONT_BODY, COL_TEXT);
+    } else {
+        uiDrawTitleBar("NOT QUITE", COL_ERROR);
+        uiDrawCenteredText("Oops", CONTENT_Y + 40, FONT_XLARGE, COL_ERROR);
+        uiDrawCenteredText("Better luck next time", CONTENT_Y + 90, FONT_BODY, COL_TEXT);
+    }
+
+    uiDrawHint("Press to see the reveal", CONTENT_Y + 140);
+    uiDrawSoftButtons("", "REVEAL");
+}
+
+// ============================================================
+// Flight completion logging
+// ============================================================
+
+static void enterGameDone() {
+    if (session.pourCount > 0) {
+        diagLogFlight((uint8_t)currentMode, session.pourCount, session.pourOrder);
+    }
+    persistClearSession();
+    state = GAME_DONE;
+    flushInput();
+    uiRequestRedraw();
+}
+
+// ============================================================
 // Blocking pour cycle
 // ============================================================
 
+static void showLockoutScreen() {
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+    uiDrawTitleBar("LOW BATTERY", COL_ERROR);
+    uiDrawCenteredText("Battery Too", CONTENT_Y + 40, FONT_BODY, COL_TEXT);
+    uiDrawCenteredText("Low", CONTENT_Y + 65, FONT_BODY, COL_TEXT);
+    uiDrawHint("Charge before pouring", CONTENT_Y + 110);
+    uiDrawSoftButtons("BACK", "");
+
+    flushInput();
+    while (true) {
+        audioUpdate();
+        inputUpdate();
+        InputEvent evt = inputGetEvent();
+        if (evt == INPUT_BTN_LEFT || evt == INPUT_ENC_CLICK || evt == INPUT_BTN_RIGHT) {
+            audioPlayTone(TONE_SELECT);
+            break;
+        }
+        delay(10);
+    }
+}
+
 static void runPourCycle() {
+    if (batteryIsLockout()) {
+        showLockoutScreen();
+        if (session.pourCount > 0) {
+            motorDisable();
+            flushInput();
+            state = GAME_TASTING;
+            persistSaveGame(currentMode, state, session);
+            uiRequestRedraw();
+        } else {
+            gameActive = false;
+            uiPopScreenT(TRANS_FADE);
+        }
+        return;
+    }
+
+    uiResetIdleTimer();
+
+    if (!homedThisFlight) {
+        runHomingSequence();
+        homedThisFlight = true;
+    }
+
     TFT_eSPI* tft = uiGetTFT();
 
-    session.currentGlass = selectRandomGlass();
+    if (modeIsChallenge()) {
+        // Challenge modes: glass assignment is pre-computed
+        session.currentGlass = session.pourOrder[session.pourCount];
+    } else {
+        session.currentGlass = selectRandomGlass();
+    }
 
     Serial.printf("[Game] Pour %d/%d — glass %d",
-                  session.pourCount + 1, NUM_GLASSES, session.currentGlass);
+                  session.pourCount + 1, session.glassCount, session.currentGlass);
     if (modeUsesNames() && session.glassName[session.pourCount][0]) {
         Serial.printf(" (%s)", session.glassName[session.pourCount]);
+    } else if (modeIsChallenge()) {
+        int bi = session.challengePourOrder[session.pourCount];
+        Serial.printf(" (bottle: %s)", session.bottleName[bi]);
     }
     Serial.println();
 
@@ -380,7 +703,6 @@ static void runPourCycle() {
 
     audioPlayTone(TONE_ARRIVE);
     delayWithAudio(GAME_SPIN_SETTLE_MS);
-    motorDisable();  // release holding torque — carousel doesn't need it while idle/pouring
 
     // --- 3. Transition to interactive pour screen ---
     flushInput();
@@ -389,6 +711,7 @@ static void runPourCycle() {
 }
 
 static void runFinalSpin() {
+    uiResetIdleTimer();
     TFT_eSPI* tft = uiGetTFT();
 
     tft->fillScreen(COL_BG);
@@ -413,6 +736,7 @@ static void runFinalSpin() {
 
     flushInput();
     state = GAME_TASTING;
+    persistSaveGame(currentMode, state, session);
     uiRequestRedraw();
 }
 
@@ -447,9 +771,9 @@ static void drawPouring(bool fullRedraw) {
     uiDrawCenteredText(pourNum, CONTENT_Y + 20, FONT_XLARGE, COL_SELECTED);
 
     if (modeUsesNames() && session.glassName[session.pourCount][0]) {
-        uiDrawCenteredText(session.glassName[session.pourCount],
-                           CONTENT_Y + 80, FONT_BODY, COL_ACCENT);
-        uiDrawCenteredText("Ready To Pour", CONTENT_Y + 110, FONT_BODY, COL_TEXT);
+        int nextY = uiDrawCenteredTextWrap(session.glassName[session.pourCount],
+                                           CONTENT_Y + 80, FONT_BODY, COL_ACCENT);
+        uiDrawCenteredText("Ready To Pour", nextY + 10, FONT_BODY, COL_TEXT);
     } else {
         uiDrawCenteredText("Ready To Pour", CONTENT_Y + 105, FONT_BODY, COL_TEXT);
     }
@@ -471,13 +795,14 @@ static void drawTasting(bool fullRedraw) {
     snprintf(countStr, sizeof(countStr), "%d Glasses Poured", session.pourCount);
     uiDrawCenteredText(countStr, CONTENT_Y + 20, FONT_BODY, COL_TEXT);
 
-    // Glass position indicators
+    // Glass position indicators (centered for glass count)
     {
         const int boxW = 44, boxH = 44, gap = 10;
-        int totalW = NUM_GLASSES * boxW + (NUM_GLASSES - 1) * gap;
+        int n = session.glassCount;
+        int totalW = n * boxW + (n - 1) * gap;
         int startX = (SCREEN_W - totalW) / 2;
         int y = CONTENT_Y + 55;
-        for (int i = 0; i < NUM_GLASSES; i++) {
+        for (int i = 0; i < n; i++) {
             int x = startX + i * (boxW + gap);
             uint16_t boxCol = session.glassUsed[i] ? COL_ACCENT : COL_DIM;
             uint16_t txtCol = session.glassUsed[i] ? COL_BG     : COL_TEXT;
@@ -492,17 +817,24 @@ static void drawTasting(bool fullRedraw) {
     uiDrawCenteredText("Enjoy Your Flight", CONTENT_Y + 120, FONT_BODY, COL_TEXT);
 
     // Mode-specific hint and button text
-    if (currentMode == GAME_MODE_GUESS) {
-        uiDrawHint("Press to Start",  CONTENT_Y + 142);
-        uiDrawHint("Guessing",        CONTENT_Y + 160);
+    if (modeIsChallenge()) {
+        if (currentMode == GAME_MODE_DUPLICATE) {
+            uiDrawHint("Find the matching", CONTENT_Y + 142);
+            uiDrawHint("pair!",             CONTENT_Y + 160);
+        } else {
+            uiDrawHint("Find the odd",      CONTENT_Y + 142);
+            uiDrawHint("one out!",          CONTENT_Y + 160);
+        }
         uiDrawSoftButtons("", "GUESS");
+    } else if (currentMode == GAME_MODE_GUESS) {
+        uiDrawHint("Press to Guess",    CONTENT_Y + 150);
+        uiDrawSoftButtons("", "NEXT");
     } else if (currentMode == GAME_MODE_RANK) {
-        uiDrawHint("Press to Start",  CONTENT_Y + 142);
-        uiDrawHint("Ranking",         CONTENT_Y + 160);
-        uiDrawSoftButtons("", "RANK");
+        uiDrawHint("Press to Rank",     CONTENT_Y + 150);
+        uiDrawSoftButtons("", "NEXT");
     } else {
-        uiDrawHint("Press To Reveal", CONTENT_Y + 150);
-        uiDrawSoftButtons("", "REVEAL");
+        uiDrawHint("Press for Reveal",  CONTENT_Y + 150);
+        uiDrawSoftButtons("", "NEXT");
     }
 }
 
@@ -575,13 +907,14 @@ static void drawGuessDetail(bool fullRedraw) {
 
     uiDrawCenteredText("Your Guesses", CONTENT_Y + 10, FONT_BODY, COL_TEXT);
 
-    // Glass position boxes (same layout as tasting screen)
+    // Glass position boxes (centered for glass count)
     const int boxW = 44, boxH = 44, gap = 10;
-    int totalW = NUM_GLASSES * boxW + (NUM_GLASSES - 1) * gap;
+    int n = session.glassCount;
+    int totalW = n * boxW + (n - 1) * gap;
     int startX = (SCREEN_W - totalW) / 2;
     int boxY = CONTENT_Y + 45;
 
-    for (int i = 0; i < NUM_GLASSES; i++) {
+    for (int i = 0; i < n; i++) {
         int x = startX + i * (boxW + gap);
 
         if (session.glassUsed[i]) {
@@ -644,6 +977,106 @@ static void drawRanking(bool fullRedraw) {
 }
 
 // ============================================================
+// Rating round (Session 21)
+// ============================================================
+
+static void initRating() {
+    buildRevealMap();
+    session.ratingIndex = 0;
+    for (int i = 0; i < NUM_GLASSES; i++) {
+        session.glassRating[i] = 0;
+    }
+    state = GAME_RATING;
+    flushInput();
+    uiRequestRedraw();
+}
+
+static void drawRating(bool fullRedraw) {
+    if (!fullRedraw) return;
+
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+
+    int idx = session.ratingIndex;
+    if (idx >= revealMapCount) return;
+
+    int pourIdx = revealMap[idx].pourIdx;
+    int glass   = revealMap[idx].glass;
+
+    char titleBuf[20];
+    snprintf(titleBuf, sizeof(titleBuf), "RATE GLASS %d", glass);
+    uiDrawTitleBar(titleBuf, COL_ACCENT);
+
+    if (session.glassName[pourIdx][0]) {
+        uiDrawCenteredTextWrap(session.glassName[pourIdx],
+                               CONTENT_Y + 15, FONT_BODY, COL_TEXT);
+    } else {
+        char pourLabel[16];
+        snprintf(pourLabel, sizeof(pourLabel), "Pour #%d", pourIdx + 1);
+        uiDrawCenteredText(pourLabel, CONTENT_Y + 15, FONT_BODY, COL_TEXT);
+    }
+
+    uint8_t rating = session.glassRating[pourIdx];
+
+    // Draw star row
+    const int starW = 28, starGap = 8;
+    int totalStarW = RATING_MAX * starW + (RATING_MAX - 1) * starGap;
+    int starX0 = (SCREEN_W - totalStarW) / 2;
+    int starY  = CONTENT_Y + 55;
+
+    for (int s = 0; s < RATING_MAX; s++) {
+        int x = starX0 + s * (starW + starGap);
+        bool filled = (s < rating);
+        if (filled) {
+            tft->fillRoundRect(x, starY, starW, starW, 4, COL_ACCENT);
+            tft->setTextColor(COL_BG, COL_ACCENT);
+        } else {
+            tft->drawRoundRect(x, starY, starW, starW, 4, COL_DIM);
+            tft->setTextColor(COL_DIM, COL_BG);
+        }
+        tft->setTextSize(FONT_BODY);
+        tft->setTextDatum(MC_DATUM);
+        tft->drawChar('*', x + starW / 2, starY + starW / 2);
+    }
+
+    // Progress
+    char progBuf[16];
+    snprintf(progBuf, sizeof(progBuf), "%d of %d", idx + 1, revealMapCount);
+    uiDrawCenteredText(progBuf, CONTENT_Y + 105, FONT_SMALL, COL_DIM);
+
+    uiDrawHint("Turn to rate", CONTENT_Y + 130);
+    uiDrawHint("Click to confirm", CONTENT_Y + 148);
+
+    uiDrawSoftButtons("SKIP", "OK");
+}
+
+// ============================================================
+// Metadata formatting helpers (Session 21)
+// ============================================================
+
+static const char* priceTierStr(uint8_t tier) {
+    switch (tier) {
+        case 1: return "$";
+        case 2: return "$$";
+        case 3: return "$$$";
+        case 4: return "$$$$";
+        default: return nullptr;
+    }
+}
+
+static void drawStarRow(TFT_eSPI* tft, int cx, int y, uint8_t rating) {
+    const int starGap = 10;
+    int totalW = (rating - 1) * starGap;
+    int x0 = cx - totalW / 2;
+    tft->setTextSize(FONT_SMALL);
+    tft->setTextDatum(MC_DATUM);
+    tft->setTextColor(COL_ACCENT, COL_BG);
+    for (int s = 0; s < rating; s++) {
+        tft->drawChar('*', x0 + s * starGap, y);
+    }
+}
+
+// ============================================================
 // Reveal and Done draw functions
 // ============================================================
 
@@ -668,10 +1101,12 @@ static void drawReveal(bool fullRedraw) {
     // --- Name reveal (slot roll at FONT_BODY for fit) ---
     const char* revealStr;
     char numStr[8];
-    if (session.glassName[pourIdx][0]) {
+    if (modeIsChallenge()) {
+        int bottleIdx = session.bottleForGlass[glass - 1];
+        revealStr = session.bottleName[bottleIdx];
+    } else if (session.glassName[pourIdx][0]) {
         revealStr = session.glassName[pourIdx];
     } else {
-        // Basic mode — show pour number as the "name"
         snprintf(numStr, sizeof(numStr), "Pour %d", pourIdx + 1);
         revealStr = numStr;
     }
@@ -682,17 +1117,47 @@ static void drawReveal(bool fullRedraw) {
                   revealStr, COL_ACCENT, COL_BG, FONT_BODY);
 
     // --- Rank or pour number below the name ---
+    int metaY;
     if (currentMode == GAME_MODE_RANK) {
-        int rank = revealMapCount - 1 - idx;
-        uiDrawCenteredText(ordinalRevealStr(rank), CONTENT_Y + 80, FONT_SMALL, COL_DIM);
+        uiDrawCenteredText(ordinalRevealStr(idx), CONTENT_Y + 80, FONT_SMALL, COL_DIM);
+        metaY = CONTENT_Y + 95;
     } else {
         char pourLabel[16];
         snprintf(pourLabel, sizeof(pourLabel), "Pour #%d", pourIdx + 1);
         uiDrawCenteredText(pourLabel, CONTENT_Y + 80, FONT_SMALL, COL_DIM);
+        metaY = CONTENT_Y + 95;
+    }
+
+    // --- Metadata line (Session 21) ---
+    const LibraryEntry* entry = session.glassEntry[pourIdx];
+    if (entry) {
+        char metaBuf[32];
+        metaBuf[0] = '\0';
+        if (entry->proof > 0) {
+            snprintf(metaBuf, sizeof(metaBuf), "%d proof", entry->proof);
+        }
+        const char* pt = priceTierStr(entry->priceTier);
+        if (pt) {
+            if (metaBuf[0]) strncat(metaBuf, "  ", sizeof(metaBuf) - strlen(metaBuf) - 1);
+            strncat(metaBuf, pt, sizeof(metaBuf) - strlen(metaBuf) - 1);
+        }
+        if (entry->ageYears > 0) {
+            char ageBuf[8];
+            snprintf(ageBuf, sizeof(ageBuf), "  %dyr", entry->ageYears);
+            strncat(metaBuf, ageBuf, sizeof(metaBuf) - strlen(metaBuf) - 1);
+        }
+        if (metaBuf[0]) {
+            uiDrawCenteredText(metaBuf, metaY, FONT_SMALL, COL_DIM);
+        }
+    }
+
+    // --- Star rating (Session 21) ---
+    if (session.glassRating[pourIdx] > 0) {
+        drawStarRow(tft, SCREEN_W / 2, metaY + 12, session.glassRating[pourIdx]);
     }
 
     // --- Progress dots ---
-    int dotY   = CONTENT_Y + 115;
+    int dotY   = CONTENT_Y + 135;
     int dotR   = 6;
     int dotGap = 24;
     int dotsW  = (revealMapCount - 1) * dotGap;
@@ -706,8 +1171,6 @@ static void drawReveal(bool fullRedraw) {
 
     bool isLast = (idx >= revealMapCount - 1);
     uiDrawSoftButtons("", isLast ? "FINISH" : "NEXT");
-
-    audioPlayTone(TONE_HOME_FOUND);
 }
 
 static void drawDone(bool fullRedraw) {
@@ -722,31 +1185,117 @@ static void drawDone(bool fullRedraw) {
     int y = CONTENT_Y + 30;
     int leftX = 16;
 
-    for (int i = 0; i < revealMapCount; i++) {
-        int glass   = revealMap[i].glass;
-        int pourIdx = revealMap[i].pourIdx;
-
-        char line[40];
-        if (currentMode == GAME_MODE_RANK) {
-            int rank = revealMapCount - 1 - i;
+    if (currentMode == GAME_MODE_RANK) {
+        for (int i = 0; i < revealMapCount; i++) {
+            int glass   = revealMap[i].glass;
+            int pourIdx = revealMap[i].pourIdx;
             const char* name = session.glassName[pourIdx][0] ? session.glassName[pourIdx] : "?";
-            snprintf(line, sizeof(line), "#%d %s", rank + 1, name);
-        } else if (session.glassName[pourIdx][0]) {
-            snprintf(line, sizeof(line), "%d. %s", glass, session.glassName[pourIdx]);
-        } else {
-            snprintf(line, sizeof(line), "%d. Pour #%d", glass, pourIdx + 1);
-        }
 
-        // Draw left-aligned; TFT clips at screen edge automatically
-        tft->setTextColor(COL_ACCENT, COL_BG);
-        tft->setTextSize(FONT_BODY);
-        tft->setTextDatum(ML_DATUM);
-        tft->drawString(line, leftX, y + 10);
-        y += 28;
+            char line[40];
+            snprintf(line, sizeof(line), "#%d Glass %d - %s", i + 1, glass, name);
+
+            tft->setTextColor(COL_ACCENT, COL_BG);
+            tft->setTextSize(FONT_BODY);
+            int lineMaxW = SCREEN_W - leftX * 2;
+            tft->setTextDatum(ML_DATUM);
+            if (tft->textWidth(line) > lineMaxW) {
+                char truncBuf[40];
+                int maxChars = 0;
+                for (int c = 0; line[c] && c < 36; c++) {
+                    truncBuf[c] = line[c];
+                    truncBuf[c + 1] = '\0';
+                    if (tft->textWidth(truncBuf) > lineMaxW - tft->textWidth("..")) break;
+                    maxChars = c + 1;
+                }
+                truncBuf[maxChars] = '.';
+                truncBuf[maxChars + 1] = '.';
+                truncBuf[maxChars + 2] = '\0';
+                tft->drawString(truncBuf, leftX, y + 10);
+            } else {
+                tft->drawString(line, leftX, y + 10);
+            }
+            y += 28;
+        }
+    } else {
+        for (int i = 0; i < revealMapCount; i++) {
+            int glass   = revealMap[i].glass;
+            int pourIdx = revealMap[i].pourIdx;
+
+            char line[40];
+            if (modeIsChallenge()) {
+                int bottleIdx = session.bottleForGlass[glass - 1];
+                snprintf(line, sizeof(line), "%d. %s", glass, session.bottleName[bottleIdx]);
+            } else if (session.glassName[pourIdx][0]) {
+                snprintf(line, sizeof(line), "%d. %s", glass, session.glassName[pourIdx]);
+            } else {
+                snprintf(line, sizeof(line), "%d. Pour #%d", glass, pourIdx + 1);
+            }
+
+            tft->setTextColor(COL_ACCENT, COL_BG);
+            tft->setTextSize(FONT_BODY);
+            int lineMaxW = SCREEN_W - leftX * 2;
+            tft->setTextDatum(ML_DATUM);
+            if (tft->textWidth(line) > lineMaxW) {
+                char truncBuf[40];
+                int maxChars = 0;
+                for (int c = 0; line[c] && c < 36; c++) {
+                    truncBuf[c] = line[c];
+                    truncBuf[c + 1] = '\0';
+                    if (tft->textWidth(truncBuf) > lineMaxW - tft->textWidth("..")) break;
+                    maxChars = c + 1;
+                }
+                truncBuf[maxChars] = '.';
+                truncBuf[maxChars + 1] = '.';
+                truncBuf[maxChars + 2] = '\0';
+                tft->drawString(truncBuf, leftX, y + 10);
+            } else {
+                tft->drawString(line, leftX, y + 10);
+            }
+            y += 28;
+        }
     }
 
-    uiDrawHint("New flight or exit", y + 10);
+    uiDrawHint("New flight or exit", y + 4);
     uiDrawSoftButtons("EXIT", "NEW");
+}
+
+// ============================================================
+// Count selection screen
+// ============================================================
+
+static void drawCountSelect(bool fullRedraw) {
+    if (!fullRedraw) return;
+
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+    uiDrawTitleBar(getModeTitleText(), COL_ACCENT);
+
+    // Large glass count number
+    char num[4];
+    snprintf(num, sizeof(num), "%d", session.glassCount);
+    uiDrawCenteredText(num, CONTENT_Y + 40, FONT_XLARGE, COL_ACCENT);
+
+    uiDrawCenteredText("Glasses", CONTENT_Y + 85, FONT_BODY, COL_TEXT);
+
+    // Glass icons showing active positions
+    const int boxW = 36, boxH = 36, gap = 8;
+    int totalW = 4 * boxW + 3 * gap;
+    int startX = (SCREEN_W - totalW) / 2;
+    int y = CONTENT_Y + 115;
+    for (int i = 0; i < 4; i++) {
+        int x = startX + i * (boxW + gap);
+        bool active = (i < session.glassCount);
+        uint16_t boxCol = active ? COL_ACCENT : COL_DIM;
+        uint16_t txtCol = active ? COL_BG     : COL_TEXT;
+        tft->fillRoundRect(x, y, boxW, boxH, 4, boxCol);
+        tft->setTextColor(txtCol, boxCol);
+        tft->setTextSize(FONT_BODY);
+        tft->setTextDatum(MC_DATUM);
+        tft->drawString(String(i + 1), x + boxW / 2, y + boxH / 2);
+    }
+
+    uiDrawHint("Turn to adjust", CONTENT_Y + 168);
+    uiDrawSoftButtons("BACK", "START");
 }
 
 // ============================================================
@@ -824,6 +1373,13 @@ static void gameDraw(bool fullRedraw) {
         return;
     }
 
+    // --- Resume pour (session restore for basic mode) ---
+    if (pendingResumePour) {
+        pendingResumePour = false;
+        runPourCycle();
+        return;
+    }
+
     // ========================================================
     // Normal game draw flow
     // ========================================================
@@ -833,6 +1389,42 @@ static void gameDraw(bool fullRedraw) {
         pendingBrowse = false;
         browseReset();
         uiPushScreen(&screenBrowse);
+        return;
+    }
+
+    // --- Handle browse return in BOTTLE_SELECT state (Session 22) ---
+    if (state == GAME_BOTTLE_SELECT && awaitingBrowseReturn) {
+        awaitingBrowseReturn = false;
+        const char* name = browseGetResult();
+        if (name) {
+            strncpy(session.bottleName[session.bottleCount], name,
+                    MAX_GLASS_NAME - 1);
+            session.bottleName[session.bottleCount][MAX_GLASS_NAME - 1] = '\0';
+
+            Serial.printf("[Game] Bottle %d: %s\n",
+                          session.bottleCount + 1, session.bottleName[session.bottleCount]);
+
+            session.bottleCount++;
+            int target = challengeBottleTarget();
+            if (session.bottleCount >= target) {
+                // All bottles selected — build pour order and start pouring
+                buildChallengePourOrder();
+                runPourCycle();
+            } else {
+                // Need more bottles — show selection screen again
+                uiRequestRedraw();
+            }
+        } else {
+            // Cancelled browse
+            if (session.bottleCount > 0) {
+                // Stay on bottle select screen
+                uiRequestRedraw();
+            } else {
+                Serial.println("[Game] Bottle select cancelled — exiting");
+                gameActive = false;
+                uiPopScreenT(TRANS_FADE);
+            }
+        }
         return;
     }
 
@@ -847,6 +1439,7 @@ static void gameDraw(bool fullRedraw) {
             strncpy(session.glassName[session.pourCount], name,
                     MAX_GLASS_NAME - 1);
             session.glassName[session.pourCount][MAX_GLASS_NAME - 1] = '\0';
+            session.glassEntry[session.pourCount] = browseGetEntry();
 
             Serial.printf("[Game] Named pour %d: %s\n",
                           session.pourCount + 1,
@@ -870,36 +1463,103 @@ static void gameDraw(bool fullRedraw) {
 
     // --- Normal state drawing ---
     switch (state) {
-        case GAME_POURING:      drawPouring(fullRedraw);      break;
-        case GAME_TASTING:      drawTasting(fullRedraw);      break;
-        case GAME_GUESSING:     drawGuessing(fullRedraw);     break;
-        case GAME_GUESS_SCORE:  drawGuessScore(fullRedraw);   break;
-        case GAME_GUESS_DETAIL: drawGuessDetail(fullRedraw);  break;
-        case GAME_RANKING:      drawRanking(fullRedraw);      break;
-        case GAME_REVEAL:       drawReveal(fullRedraw);       break;
-        case GAME_DONE:         drawDone(fullRedraw);         break;
+        case GAME_COUNT_SELECT:    drawCountSelect(fullRedraw);    break;
+        case GAME_BOTTLE_SELECT:   drawBottleSelect(fullRedraw);   break;
+        case GAME_POURING:
+            if (modeIsChallenge()) drawChallengePouring(fullRedraw);
+            else                   drawPouring(fullRedraw);
+            break;
+        case GAME_TASTING:         drawTasting(fullRedraw);        break;
+        case GAME_RATING:          drawRating(fullRedraw);         break;
+        case GAME_GUESSING:        drawGuessing(fullRedraw);       break;
+        case GAME_GUESS_SCORE:     drawGuessScore(fullRedraw);     break;
+        case GAME_GUESS_DETAIL:    drawGuessDetail(fullRedraw);    break;
+        case GAME_RANKING:         drawRanking(fullRedraw);        break;
+        case GAME_CHALLENGE_GUESS: drawChallengeGuess(fullRedraw); break;
+        case GAME_CHALLENGE_RESULT:drawChallengeResult(fullRedraw);break;
+        case GAME_REVEAL:          drawReveal(fullRedraw);         break;
+        case GAME_DONE:            drawDone(fullRedraw);           break;
         default: break;
+    }
+}
+
+static void startAfterCountSelect() {
+    settingsSetGlassCount(session.glassCount);
+    settingsSave();
+    if (modeUsesNames()) {
+        requestBrowse(false);
+    } else {
+        runPourCycle();
     }
 }
 
 static void gameInput(InputEvent evt) {
     switch (state) {
 
+        case GAME_COUNT_SELECT:
+            if (evt == INPUT_ENC_CW) {
+                if (session.glassCount < 4) {
+                    session.glassCount++;
+                    audioPlayTone(TONE_CLICK);
+                    uiRequestRedraw();
+                }
+            } else if (evt == INPUT_ENC_CCW) {
+                if (session.glassCount > 2) {
+                    session.glassCount--;
+                    audioPlayTone(TONE_CLICK);
+                    uiRequestRedraw();
+                }
+            } else if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+                audioPlayTone(TONE_CONFIRM);
+                persistSaveGame(currentMode, state, session);
+                startAfterCountSelect();
+            } else if (evt == INPUT_BTN_LEFT) {
+                audioPlayTone(TONE_SELECT);
+                gameActive = false;
+                uiPopScreenT(TRANS_FADE);
+            }
+            break;
+
         case GAME_NAMING:
+            break;
+
+        case GAME_BOTTLE_SELECT:
+            if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+                audioPlayTone(TONE_SELECT);
+                awaitingBrowseReturn = true;
+                browseReset();
+                uiPushScreen(&screenBrowse);
+            } else if (evt == INPUT_BTN_LEFT) {
+                audioPlayTone(TONE_SELECT);
+                if (session.bottleCount > 0) {
+                    // Undo last bottle selection
+                    session.bottleCount--;
+                    session.bottleName[session.bottleCount][0] = '\0';
+                    uiRequestRedraw();
+                } else {
+                    gameActive = false;
+                    uiPopScreenT(TRANS_FADE);
+                }
+            }
             break;
 
         case GAME_POURING:
             if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 audioPlayTone(TONE_CONFIRM);
                 session.glassUsed[session.currentGlass - 1] = true;
-                session.pourOrder[session.pourCount] = session.currentGlass;
+                if (!modeIsChallenge()) {
+                    session.pourOrder[session.pourCount] = session.currentGlass;
+                }
                 session.pourCount++;
+                persistSaveGame(currentMode, state, session);
 
                 Serial.printf("[Game] Poured glass %d (pour %d/%d)\n",
-                              session.currentGlass, session.pourCount, NUM_GLASSES);
+                              session.currentGlass, session.pourCount, session.glassCount);
 
-                if (session.pourCount >= NUM_GLASSES) {
+                if (session.pourCount >= session.glassCount) {
                     runFinalSpin();
+                } else if (modeIsChallenge()) {
+                    runPourCycle();
                 } else if (modeUsesNames()) {
                     requestBrowse(false);
                 } else {
@@ -918,24 +1578,91 @@ static void gameInput(InputEvent evt) {
             if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 audioPlayTone(TONE_CONFIRM);
                 if (session.pourCount > 0) {
+                    if (modeIsChallenge()) {
+                        buildRevealMap();
+                        session.currentGlass = 1;
+                        session.challengeGuessCount = 0;
+                        session.challengeGuess[0] = 0;
+                        session.challengeGuess[1] = 0;
+                        state = GAME_CHALLENGE_GUESS;
+                        flushInput();
+                        uiRequestRedraw();
+                    } else if (currentMode == GAME_MODE_RANK) {
+                        initRanking(false);
+                    } else if (currentMode == GAME_MODE_GUESS) {
+                        initGuessing(false);
+                    } else {
+                        buildRevealMap();
+                        session.revealIndex = 0;
+                        state = GAME_REVEAL;
+                        audioPlayTone(TONE_HOME_FOUND);
+                        flushInput();
+                        uiRequestRedraw();
+                    }
+                } else {
+                    enterGameDone();
+                }
+            }
+            break;
+
+        // ============================================================
+        // Rating round input handling (Session 21)
+        // ============================================================
+
+        case GAME_RATING: {
+            int pourIdx = revealMap[session.ratingIndex].pourIdx;
+
+            if (evt == INPUT_ENC_CW) {
+                if (session.glassRating[pourIdx] < RATING_MAX) {
+                    session.glassRating[pourIdx]++;
+                    audioPlayTone(TONE_CLICK);
+                    uiRequestRedraw();
+                }
+            } else if (evt == INPUT_ENC_CCW) {
+                if (session.glassRating[pourIdx] > 0) {
+                    session.glassRating[pourIdx]--;
+                    audioPlayTone(TONE_CLICK);
+                    uiRequestRedraw();
+                }
+            } else if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+                audioPlayTone(TONE_CONFIRM);
+                if (session.ratingIndex < revealMapCount - 1) {
+                    session.ratingIndex++;
+                    uiRequestRedraw();
+                } else {
+                    // Rating complete — advance to mode-specific next step
                     if (currentMode == GAME_MODE_GUESS) {
                         initGuessing(false);
                     } else if (currentMode == GAME_MODE_RANK) {
                         initRanking(false);
                     } else {
-                        buildRevealMap();
-                        state = GAME_REVEAL;
                         session.revealIndex = 0;
+                        state = GAME_REVEAL;
+                        audioPlayTone(TONE_HOME_FOUND);
                         flushInput();
                         uiRequestRedraw();
                     }
+                }
+            } else if (evt == INPUT_BTN_LEFT) {
+                // SKIP — skip entire rating round
+                audioPlayTone(TONE_SELECT);
+                for (int i = 0; i < NUM_GLASSES; i++) {
+                    session.glassRating[i] = 0;
+                }
+                if (currentMode == GAME_MODE_GUESS) {
+                    initGuessing(false);
+                } else if (currentMode == GAME_MODE_RANK) {
+                    initRanking(false);
                 } else {
-                    state = GAME_DONE;
+                    session.revealIndex = 0;
+                    state = GAME_REVEAL;
+                    audioPlayTone(TONE_HOME_FOUND);
                     flushInput();
                     uiRequestRedraw();
                 }
             }
             break;
+        }
 
         // ============================================================
         // Guessing round input handling (Session 13)
@@ -999,9 +1726,9 @@ static void gameInput(InputEvent evt) {
         case GAME_GUESS_DETAIL:
             if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 // Advance to standard reveal
-                audioPlayTone(TONE_CONFIRM);
                 session.revealIndex = 0;
                 state = GAME_REVEAL;
+                audioPlayTone(TONE_HOME_FOUND);
                 flushInput();
                 uiRequestRedraw();
             } else if (evt == INPUT_BTN_LEFT) {
@@ -1029,6 +1756,7 @@ static void gameInput(InputEvent evt) {
                     buildRevealMapFromRank();
                     session.revealIndex = 0;
                     state = GAME_REVEAL;
+                    audioPlayTone(TONE_HOME_FOUND);
                     flushInput();
                     uiRequestRedraw();
                 }
@@ -1047,17 +1775,96 @@ static void gameInput(InputEvent evt) {
             break;
         }
 
+        // ============================================================
+        // Challenge guess input handling (Session 22)
+        // ============================================================
+
+        case GAME_CHALLENGE_GUESS:
+            if (evt == INPUT_ENC_CW) {
+                if (session.currentGlass < 4) {
+                    session.currentGlass++;
+                    audioPlayTone(TONE_CLICK);
+                    uiRequestRedraw();
+                }
+            } else if (evt == INPUT_ENC_CCW) {
+                if (session.currentGlass > 1) {
+                    session.currentGlass--;
+                    audioPlayTone(TONE_CLICK);
+                    uiRequestRedraw();
+                }
+            } else if (evt == INPUT_ENC_CLICK) {
+                // Toggle selection of current glass
+                int g = session.currentGlass;
+
+                // Check if already selected — deselect it
+                bool deselected = false;
+                for (int i = 0; i < session.challengeGuessCount; i++) {
+                    if (session.challengeGuess[i] == g) {
+                        // Remove this selection
+                        for (int j = i; j < session.challengeGuessCount - 1; j++) {
+                            session.challengeGuess[j] = session.challengeGuess[j + 1];
+                        }
+                        session.challengeGuessCount--;
+                        session.challengeGuess[session.challengeGuessCount] = 0;
+                        audioPlayTone(TONE_SELECT);
+                        deselected = true;
+                        break;
+                    }
+                }
+
+                if (!deselected) {
+                    int maxSelections = (currentMode == GAME_MODE_DUPLICATE) ? 2 : 1;
+                    if (session.challengeGuessCount < maxSelections) {
+                        session.challengeGuess[session.challengeGuessCount] = g;
+                        session.challengeGuessCount++;
+                        audioPlayTone(TONE_CONFIRM);
+                    }
+                }
+                uiRequestRedraw();
+
+            } else if (evt == INPUT_BTN_RIGHT) {
+                // Confirm guess — only if enough selections made
+                int needed = (currentMode == GAME_MODE_DUPLICATE) ? 2 : 1;
+                if (session.challengeGuessCount >= needed) {
+                    audioPlayTone(TONE_CONFIRM);
+                    session.challengeCorrect = checkChallengeGuess();
+                    if (session.challengeCorrect) {
+                        audioPlayTone(TONE_HOME_FOUND);
+                    } else {
+                        audioPlayTone(TONE_ERROR);
+                    }
+                    state = GAME_CHALLENGE_RESULT;
+                    flushInput();
+                    uiRequestRedraw();
+                }
+            } else if (evt == INPUT_BTN_LEFT) {
+                // Back to tasting
+                audioPlayTone(TONE_SELECT);
+                state = GAME_TASTING;
+                flushInput();
+                uiRequestRedraw();
+            }
+            break;
+
+        case GAME_CHALLENGE_RESULT:
+            if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+                session.revealIndex = 0;
+                state = GAME_REVEAL;
+                audioPlayTone(TONE_HOME_FOUND);
+                flushInput();
+                uiRequestRedraw();
+            }
+            break;
+
         case GAME_REVEAL:
             if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 if (session.revealIndex < revealMapCount - 1) {
                     session.revealIndex++;
-                    audioPlayTone(TONE_SELECT);
+                    audioPlayTone(TONE_HOME_FOUND);
                     uiRequestRedraw();
                 } else {
                     audioPlayTone(TONE_CONFIRM);
-                    state = GAME_DONE;
-                    flushInput();
-                    uiRequestRedraw();
+                    enterGameDone();
                 }
             }
             break;
@@ -1066,7 +1873,10 @@ static void gameInput(InputEvent evt) {
             if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 audioPlayTone(TONE_SELECT);
                 resetSession();
-                if (modeUsesNames()) {
+                if (modeIsChallenge()) {
+                    state = GAME_BOTTLE_SELECT;
+                    uiRequestRedraw();
+                } else if (modeUsesNames()) {
                     requestBrowse(false);
                 } else {
                     runPourCycle();
@@ -1097,17 +1907,17 @@ static void gameOnEnter() {
     pendingBrowse = false;
     awaitingBrowseReturn = false;
 
-    if (modeUsesNames()) {
-        Serial.printf("[Game] Starting %s\n",
-                      currentMode == GAME_MODE_GUESS ? "Best Guess" :
-                      currentMode == GAME_MODE_RANK  ? "Ranked Flight" : "Named Flight");
-        resetSession();
-        requestBrowse(true);
+    Serial.printf("[Game] Starting %s\n", getModeTitleText());
+    resetSession();
+
+    if (modeIsChallenge()) {
+        // Challenge modes lock to 4 glasses, skip count select
+        session.glassCount = NUM_GLASSES;
+        state = GAME_BOTTLE_SELECT;
     } else {
-        Serial.println("[Game] Starting Basic Flight");
-        resetSession();
-        runPourCycle();
+        state = GAME_COUNT_SELECT;
     }
+    uiRequestRedraw();
 }
 
 // ============================================================
@@ -1131,6 +1941,18 @@ const Screen screenGame = {
 
 bool gameIsActive() {
     return gameActive;
+}
+
+void gameAbort() {
+    if (!gameActive) return;
+    Serial.println("[Game] Aborted via long-press cancel");
+    persistClearSession();
+    gameActive = false;
+    motorDisable();
+}
+
+int gameGetGlassCount() {
+    return session.glassCount;
 }
 
 GameState gameGetState() {
@@ -1200,6 +2022,16 @@ bool gameGetGuessCorrectAt(int revealIdx) {
     return session.guessForGlass[revealIdx] == revealMap[revealIdx].pourIdx;
 }
 
+uint8_t gameGetGlassRating(int pourIdx) {
+    if (pourIdx < 0 || pourIdx >= NUM_GLASSES) return 0;
+    return session.glassRating[pourIdx];
+}
+
+const LibraryEntry* gameGetGlassEntry(int pourIdx) {
+    if (pourIdx < 0 || pourIdx >= NUM_GLASSES) return nullptr;
+    return session.glassEntry[pourIdx];
+}
+
 // ============================================================
 // Phone action handlers (Session 16)
 // ============================================================
@@ -1259,4 +2091,38 @@ void gameStartFromPhone(GameMode mode) {
         phonePendingStart = true;
         uiPushScreenT(&screenGame, TRANS_FADE);
     }
+}
+
+// ============================================================
+// Session resume (called from persist module on boot)
+// ============================================================
+
+void gameResumeSession(GameMode mode, GameState resumeState,
+                       int glassCount, const GameSession& saved) {
+    currentMode = mode;
+    gameActive = true;
+    pendingBrowse = false;
+    awaitingBrowseReturn = false;
+
+    session = saved;
+    session.glassCount = glassCount;
+
+    // Determine resume state — land on the appropriate interactive screen.
+    // Mid-pour interruptions resume at "next pour" since we can't know
+    // if liquid landed for the interrupted pour.
+    if (resumeState == GAME_TASTING || resumeState == GAME_RATING ||
+        resumeState == GAME_GUESSING || resumeState == GAME_RANKING) {
+        state = GAME_TASTING;
+    } else if (session.pourCount >= session.glassCount) {
+        state = GAME_TASTING;
+    } else if (modeUsesNames()) {
+        state = GAME_NAMING;
+        pendingBrowse = true;
+    } else {
+        // Basic mode: trigger a pour cycle on the next gameDraw
+        pendingResumePour = true;
+    }
+
+    Serial.printf("[Game] Resumed: mode=%d state=%d pours=%d/%d\n",
+                  (int)currentMode, (int)state, session.pourCount, session.glassCount);
 }

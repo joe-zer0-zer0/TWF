@@ -51,7 +51,7 @@ struct Screen {
 void uiInit(TFT_eSPI* tftPtr);             // Pass the TFT instance
 void uiPushScreen(const Screen* screen);    // Navigate forward (instant)
 void uiPopScreen();                         // Navigate back (instant)
-void uiReplaceScreen(const Screen* screen); // Swap top of stack (instant)
+void uiGoHome();                            // Unwind stack to bottom (home screen)
 void uiRequestRedraw();                     // Flag active screen for full redraw
 void uiUpdate();                            // Call each loop — drains input events, redraws if needed
 const Screen* uiActiveScreen();             // Current top-of-stack (nullptr if empty)
@@ -81,6 +81,13 @@ void uiDrawMenuItem(int index, const char* text, bool selected);
 // Centered text at a given Y position
 void uiDrawCenteredText(const char* text, int y, int fontSize, uint16_t color);
 
+// Centered text with auto-wrap: if text exceeds maxWidth, it wraps to a
+// second line (splitting at the last space that fits). Returns the Y
+// coordinate below the last line drawn, so callers can position
+// subsequent content. Pass 0 for maxWidth to use SCREEN_W - 16.
+int uiDrawCenteredTextWrap(const char* text, int y, int fontSize,
+                           uint16_t color, int maxWidth = 0);
+
 // Hint text (small, dimmed) centered at Y
 void uiDrawHint(const char* text, int y);
 
@@ -89,6 +96,9 @@ void uiClearContent();
 
 // Get the TFT pointer (for screens that need direct drawing)
 TFT_eSPI* uiGetTFT();
+
+// --- Idle timer / display timeout ---
+void uiResetIdleTimer();       // Call before motor ops or active WS traffic
 
 // ============================================================
 // ScrollList — Reusable scrollable list component (Session 6)

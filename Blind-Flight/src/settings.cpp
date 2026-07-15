@@ -1,5 +1,6 @@
 #include "settings.h"
 #include "config.h"
+#include "battery.h"
 #include <Preferences.h>
 
 // ============================================================
@@ -33,6 +34,10 @@ static uint8_t sBrightness = 4;    // 0–4
 static bool    sWifiOn    = false;
 static uint8_t sSpinSpeed = 1;     // 0=Fast, 1=Normal, 2=Theatrical
 static uint8_t sPourSide  = 0;    // 0=Front, 1=Right, 2=Rear, 3=Left
+static int16_t sHomeOffset = 0;   // microstep trim for pour alignment
+static uint8_t  sGlassCount = 4;  // 2–4 glasses per flight
+static uint16_t sDimDelay  = DEFAULT_DIM_DELAY;   // seconds
+static uint16_t sOffDelay  = DEFAULT_OFF_DELAY;   // seconds
 static bool    sDirty     = false;
 
 // ============================================================
@@ -48,6 +53,10 @@ void settingsInit() {
     sWifiOn     = prefs.getBool("wifiOn",  false);
     sSpinSpeed  = prefs.getUChar("spinSpd", 1);
     sPourSide   = prefs.getUChar("pourSd",  0);
+    sHomeOffset = prefs.getShort("homeOff", 0);
+    sGlassCount = prefs.getUChar("glassCt", 4);
+    sDimDelay   = prefs.getUShort("dimDly", DEFAULT_DIM_DELAY);
+    sOffDelay   = prefs.getUShort("offDly", DEFAULT_OFF_DELAY);
 
     prefs.end();
 
@@ -56,15 +65,19 @@ void settingsInit() {
     if (sBrightness > 4) sBrightness = 4;
     if (sSpinSpeed > 2)  sSpinSpeed = 2;
     if (sPourSide > 3)   sPourSide = 3;
+    if (sHomeOffset < -200) sHomeOffset = -200;
+    if (sHomeOffset >  200) sHomeOffset =  200;
+    if (sGlassCount < 2) sGlassCount = 2;
+    if (sGlassCount > 4) sGlassCount = 4;
+    if (sDimDelay < 30)   sDimDelay = 30;
+    if (sDimDelay > 300)  sDimDelay = 300;
+    if (sOffDelay < 120)  sOffDelay = 120;
+    if (sOffDelay > 1800) sOffDelay = 1800;
 
     sDirty = false;
 
-    // Configure battery ADC pin
-    pinMode(PIN_BATT_ADC, INPUT);
-    analogSetAttenuation(ADC_11db);  // Full 0–3.3V range
-
-    Serial.printf("[Settings] Loaded: snd=%d vol=%d bright=%d wifi=%d spd=%d pour=%d\n",
-                  sSoundOn, sVolume, sBrightness, sWifiOn, sSpinSpeed, sPourSide);
+    Serial.printf("[Settings] Loaded: snd=%d vol=%d bright=%d wifi=%d spd=%d pour=%d homeOff=%d\n",
+                  sSoundOn, sVolume, sBrightness, sWifiOn, sSpinSpeed, sPourSide, sHomeOffset);
 }
 
 void settingsSave() {
@@ -78,6 +91,10 @@ void settingsSave() {
     prefs.putBool("wifiOn",   sWifiOn);
     prefs.putUChar("spinSpd", sSpinSpeed);
     prefs.putUChar("pourSd",  sPourSide);
+    prefs.putShort("homeOff", sHomeOffset);
+    prefs.putUChar("glassCt",  sGlassCount);
+    prefs.putUShort("dimDly",  sDimDelay);
+    prefs.putUShort("offDly",  sOffDelay);
 
     prefs.end();
 
@@ -119,36 +136,54 @@ void    settingsSetSpinSpeed(uint8_t v) { if (v > 2) v = 2; sSpinSpeed = v; sDir
 uint8_t settingsGetPourSide()          { return sPourSide; }
 void    settingsSetPourSide(uint8_t v) { if (v > 3) v = 3; sPourSide = v; sDirty = true; }
 
+int16_t settingsGetHomeOffset()           { return sHomeOffset; }
+void    settingsSetHomeOffset(int16_t v)  {
+    if (v < -200) v = -200;
+    if (v >  200) v =  200;
+    sHomeOffset = v;
+    sDirty = true;
+}
+
 // ============================================================
-// Battery ADC
+// Glass count
+// ============================================================
+
+uint8_t settingsGetGlassCount()          { return sGlassCount; }
+void    settingsSetGlassCount(uint8_t v) {
+    if (v < 2) v = 2;
+    if (v > 4) v = 4;
+    sGlassCount = v;
+    sDirty = true;
+}
+
+// ============================================================
+// Display timeout
+// ============================================================
+
+uint16_t settingsGetDimDelay()           { return sDimDelay; }
+void     settingsSetDimDelay(uint16_t v) {
+    if (v < 30)  v = 30;
+    if (v > 300) v = 300;
+    sDimDelay = v;
+    sDirty = true;
+}
+
+uint16_t settingsGetOffDelay()           { return sOffDelay; }
+void     settingsSetOffDelay(uint16_t v) {
+    if (v < 120)  v = 120;
+    if (v > 1800) v = 1800;
+    sOffDelay = v;
+    sDirty = true;
+}
+
+// ============================================================
+// Battery ADC — thin wrappers over battery module
 // ============================================================
 
 float settingsReadBatteryV() {
-    // Multi-sample average to smooth ADC noise.
-    // analogReadMilliVolts() (Session 19) applies the ESP32's factory
-    // eFuse ADC calibration (offset + nonlinearity correction) instead
-    // of the raw-count linear approximation (raw * 3.3/4095), which can
-    // be off by 100–200 mV — worst near the top of the 11 dB range,
-    // right where full-charge readings sit.
-    const int SAMPLES = 16;
-    long sumMv = 0;
-    for (int i = 0; i < SAMPLES; i++) {
-        sumMv += analogReadMilliVolts(PIN_BATT_ADC);
-    }
-    float adcV = ((float)sumMv / SAMPLES) / 1000.0f;
-
-    // Reverse the voltage divider to get battery voltage
-    float battV = adcV / BATT_DIV_RATIO;
-
-    return battV;
+    return batteryGetVoltage();
 }
 
 int settingsBatteryPercent() {
-    float v = settingsReadBatteryV();
-
-    if (v >= BATT_FULL_V) return 100;
-    if (v <= BATT_EMPTY_V) return 0;
-
-    float pct = (v - BATT_EMPTY_V) / (BATT_FULL_V - BATT_EMPTY_V) * 100.0f;
-    return (int)(pct + 0.5f);
+    return batteryGetPercent();
 }

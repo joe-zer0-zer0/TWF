@@ -34,9 +34,11 @@ static int runtimeMaxSpeed   = MOTOR_MAX_SPEED;  // microsteps/sec
 static int runtimeExtraMin   = 1;                 // min extra full revolutions
 static int runtimeExtraMax   = 3;                 // max extra full revolutions
 
-// Pour side offset (Session 20)
-// Combines POUR_OFFSET with user-selected side (0–3 × MICROSTEPS_PER_GLASS)
+// Pour side offset (Session 20) + home offset calibration
+// Combines POUR_OFFSET with user-selected side and per-unit trim
 static int effectivePourOffset = POUR_OFFSET;
+static int pourSideValue = 0;    // cached side (0–3)
+static int homeOffsetValue = 0;  // cached trim (microsteps)
 
 // Diagnostics
 static int lastDrift       = 0;   // drift (microsteps) from last verified spin
@@ -328,6 +330,9 @@ void motorMoveToPosition(int targetPos) {
         stepsToMove = ccwDist;
     }
 
+    Serial.printf("[Motor] MoveToPos: cur=%d target=%d steps=%d dir=%s\n",
+                  currentNorm, targetPos, stepsToMove, clockwise ? "CW" : "CCW");
+
     if (stepsToMove == 0) return;
 
     moveSteps(stepsToMove, clockwise);
@@ -346,6 +351,8 @@ void motorMoveToGlass(int glass) {
     if (glass < 1) glass = 1;
     if (glass > NUM_GLASSES) glass = NUM_GLASSES;
     int targetPos = ((glass - 1) * MICROSTEPS_PER_GLASS + effectivePourOffset) % MICROSTEPS_PER_REV;
+    Serial.printf("[Motor] MoveToGlass(%d): base=%d + offset=%d = target=%d\n",
+                  glass, (glass - 1) * MICROSTEPS_PER_GLASS, effectivePourOffset, targetPos);
     motorMoveToPosition(targetPos);
 }
 
@@ -368,6 +375,18 @@ void motorSpinToGlass(int glass, int extraRevolutions) {
     digitalWrite(PIN_MOTOR_EN, LOW);
     moveStepsVerified(totalSteps, true, runtimeMaxSpeed, currentNorm);  // always clockwise, runtime speed
     currentMotorPos = targetPos;
+
+    // Closed-loop drift correction: if the Hall sensor detected drift
+    // during this spin, adjust our tracked position so the next move
+    // starts from where the disc actually is, not where we assumed.
+    // Positive lastDrift = disc is behind (lagging), so our tracked
+    // position is ahead of reality — subtract to correct.
+    if (lastDrift != 0) {
+        int corrected = (currentMotorPos - lastDrift + MICROSTEPS_PER_REV) % MICROSTEPS_PER_REV;
+        Serial.printf("[Motor] Drift correction: drift=%d, pos %d -> %d\n",
+                      lastDrift, currentMotorPos, corrected);
+        currentMotorPos = corrected;
+    }
 }
 
 void motorSpinSteps(int steps) {
@@ -415,11 +434,24 @@ void motorSetSpinSpeed(uint8_t level) {
                   level, runtimeMaxSpeed, runtimeExtraMin, runtimeExtraMax);
 }
 
+static void recalcEffectiveOffset() {
+    int raw = POUR_OFFSET + pourSideValue * MICROSTEPS_PER_GLASS + homeOffsetValue;
+    effectivePourOffset = ((raw % MICROSTEPS_PER_REV) + MICROSTEPS_PER_REV) % MICROSTEPS_PER_REV;
+}
+
 void motorSetPourSide(uint8_t side) {
     if (side > 3) side = 3;
-    effectivePourOffset = (POUR_OFFSET + side * MICROSTEPS_PER_GLASS) % MICROSTEPS_PER_REV;
+    pourSideValue = side;
+    recalcEffectiveOffset();
     Serial.printf("[Motor] Pour side set: side=%d effectiveOffset=%d\n",
                   side, effectivePourOffset);
+}
+
+void motorSetHomeOffset(int offset) {
+    homeOffsetValue = offset;
+    recalcEffectiveOffset();
+    Serial.printf("[Motor] Home offset set: offset=%d effectiveOffset=%d\n",
+                  offset, effectivePourOffset);
 }
 
 int motorGetPourOffset() {

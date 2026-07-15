@@ -16,6 +16,9 @@
 #include "screens.h"
 #include "transitions.h"
 #include "settings.h"
+#include "persist.h"
+#include "game.h"
+#include "ui.h"
 
 // --- Image assets (auto-generated headers) ---
 #include "img_logo_full.h"
@@ -246,6 +249,45 @@ static void splashDraw(bool fullRedraw) {
     }
 }
 
+// Blocking resume prompt — returns true if user chose RESUME
+static bool showResumePrompt() {
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillScreen(COL_BG);
+    uiDrawTitleBar("RESUME FLIGHT?", COL_ACCENT);
+
+    const char* modeName = persistGetModeName();
+    int pours = persistGetPourCount();
+    int total = persistGetGlassCount();
+
+    uiDrawCenteredText(modeName, CONTENT_Y + 30, FONT_BODY, COL_TEXT);
+
+    char info[32];
+    snprintf(info, sizeof(info), "%d of %d poured", pours, total);
+    uiDrawCenteredText(info, CONTENT_Y + 65, FONT_BODY, COL_ACCENT);
+
+    uiDrawHint("Power was lost mid-flight", CONTENT_Y + 110);
+    uiDrawSoftButtons("DISCARD", "RESUME");
+
+    // Wait for user choice
+    inputUpdate();
+    while (inputGetEvent() != INPUT_NONE) {}
+
+    while (true) {
+        audioUpdate();
+        inputUpdate();
+        InputEvent evt = inputGetEvent();
+        if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+            audioPlayTone(TONE_CONFIRM);
+            return true;
+        }
+        if (evt == INPUT_BTN_LEFT) {
+            audioPlayTone(TONE_SELECT);
+            return false;
+        }
+        delay(10);
+    }
+}
+
 static void splashInput(InputEvent evt) {
     if (!animationDone) return;
 
@@ -254,9 +296,30 @@ static void splashInput(InputEvent evt) {
         case INPUT_BTN_LEFT:
         case INPUT_BTN_RIGHT:
             audioPlayTone(TONE_SELECT);
-            // Run homing (blocking), then fade-transition to home screen
             runHomingSequence();
-            uiReplaceScreenT(&screenHome, TRANS_FADE);
+
+            if (persistHasSession()) {
+                if (showResumePrompt()) {
+                    // Resume: load session and push game screen
+                    GameMode mode;
+                    GameState resumeState;
+                    int glassCount;
+                    GameSession saved;
+                    if (persistLoadGame(mode, resumeState, glassCount, saved)) {
+                        uiReplaceScreenT(&screenHome, TRANS_FADE);
+                        gameResumeSession(mode, resumeState, glassCount, saved);
+                        uiPushScreenT(&screenGame, TRANS_FADE);
+                    } else {
+                        persistClearSession();
+                        uiReplaceScreenT(&screenHome, TRANS_FADE);
+                    }
+                } else {
+                    persistClearSession();
+                    uiReplaceScreenT(&screenHome, TRANS_FADE);
+                }
+            } else {
+                uiReplaceScreenT(&screenHome, TRANS_FADE);
+            }
             break;
 
         default:

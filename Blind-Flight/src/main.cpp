@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "settings.h"
+#include "battery.h"
 #include "audio.h"
 #include "input.h"
 #include "motor.h"
@@ -12,6 +13,10 @@
 #include "splash.h"
 #include "game.h"
 #include "wifi_portal.h"
+#include "diagnostics.h"
+#include "persist.h"
+#include "favorites.h"
+#include "ota.h"
 
 // ============================================================
 // Blind Flight — Session 17: Settings & Persistent Preferences
@@ -35,11 +40,17 @@ TFT_eSPI tft = TFT_eSPI();
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n=== Blind Flight Session 17 ===");
-    Serial.println("Settings & Persistent Preferences\n");
+    Serial.println("\n=== Blind Flight v" FW_VERSION " ===\n");
+
+    // Confirm current firmware is valid (prevents OTA rollback)
+    otaMarkValid();
 
     // --- Persistent settings (must be first — other modules read from it) ---
     settingsInit();
+    favoritesInit();
+    batteryInit();
+    persistInit();
+    diagInit();
 
     // --- Display init ---
     tft.init();
@@ -58,6 +69,7 @@ void setup() {
     motorInit();
     motorSetSpinSpeed(settingsGetSpinSpeed());  // Apply saved spin speed
     motorSetPourSide(settingsGetPourSide());    // Apply saved pour side
+    motorSetHomeOffset(settingsGetHomeOffset()); // Apply saved calibration trim
     uiInit(&tft);
 
     // --- Wi-Fi portal (conditional on saved setting) ---
@@ -75,16 +87,19 @@ void setup() {
 }
 
 void loop() {
-    // 1. Advance non-blocking tone sequencer
+    // 1. Battery sampling (returns immediately unless interval elapsed)
+    batteryUpdate();
+
+    // 2. Advance non-blocking tone sequencer
     audioUpdate();
 
-    // 2. Poll hardware inputs → fill event queue
+    // 3. Poll hardware inputs → fill event queue
     inputUpdate();
 
-    // 3. Drain events to active screen, redraw if needed
+    // 4. Drain events to active screen, redraw if needed
     uiUpdate();
 
-    // 4. Service Wi-Fi portal (returns immediately if not running)
+    // 5. Service Wi-Fi portal (returns immediately if not running)
     wifiPortalUpdate();
 
     // Yield to watchdog

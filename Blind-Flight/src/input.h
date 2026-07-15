@@ -21,8 +21,11 @@ enum InputEvent {
     INPUT_ENC_CW,       // Encoder rotated clockwise (one detent)
     INPUT_ENC_CCW,      // Encoder rotated counter-clockwise
     INPUT_ENC_CLICK,    // Encoder push-button pressed
-    INPUT_BTN_LEFT,     // Left soft button pressed
-    INPUT_BTN_RIGHT     // Right soft button pressed
+    INPUT_BTN_LEFT,     // Left soft button short press
+    INPUT_BTN_RIGHT,    // Right soft button short press
+    INPUT_BTN_LEFT_LONG,  // Left soft button long press (held >= LONG_PRESS_MS)
+    INPUT_BTN_RIGHT_LONG, // Right soft button long press
+    INPUT_ENC_LONG        // Encoder push-button long press
 };
 
 // --- API ---
@@ -38,6 +41,3 @@ InputEvent inputGetEvent();
 // Call from main loop context only — not interrupt-safe.
 void inputInjectEvent(InputEvent evt);
 
-// Raw encoder position (useful for screens that want cumulative delta)
-int inputGetEncoderPos();
-void inputSetEncoderPos(int pos);

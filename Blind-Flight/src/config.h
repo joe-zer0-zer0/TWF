@@ -66,7 +66,7 @@
 // Acceleration profile (trapezoidal)
 #define MOTOR_MAX_SPEED     1600    // microsteps/sec at full speed
 #define MOTOR_MIN_SPEED     400     // microsteps/sec at start/end (above resonance zone)
-#define MOTOR_ACCEL         3200    // microsteps/sec² acceleration rate
+#define MOTOR_ACCEL         1600    // microsteps/sec² — halved from 3200 to reduce lost steps under load
 #define HOMING_SPEED        400     // microsteps/sec — slow for homing
 
 // --- Display geometry ---
@@ -102,7 +102,7 @@
 #define COL_SELECTED    0x07E0      // Green
 #define COL_MOVING      0xFD20      // Orange
 #define COL_HOME        0x001F      // Blue
-#define COL_HIGHLIGHT   0x18E3      // Dark blue-gray (list selection bg)
+#define COL_HIGHLIGHT   0x1A3F      // Deep blue (list selection bg)
 #define COL_ERROR       0xF800      // Red
 #define COL_SCROLL_BG   0x2104      // Very dark gray (scroll track)
 #define COL_SCROLL_FG   0x6B4D      // Medium gray (scroll thumb)
@@ -115,5 +115,29 @@
 #define FONT_LARGE      4       // Big numbers, emphasis
 #define FONT_XLARGE     5       // Hero numbers
 
+// --- Display timeout defaults (seconds) ---
+#define DEFAULT_DIM_DELAY   120     // 2 minutes idle → dim to 25%
+#define DEFAULT_OFF_DELAY   600     // 10 minutes idle → backlight off
+
+// --- Rating ---
+#define RATING_MAX          5       // Maximum star rating (1-5)
+
+// Price tier boundaries: 1=$ (<$30), 2=$$ ($30-60), 3=$$$ ($60-120), 4=$$$$ ($120+)
+
 // --- Timing ---
-#define DEBOUNCE_MS     50
+#define DEBOUNCE_MS         50
+#define LONG_PRESS_MS       600
+
+// --- Head-to-Head multiplayer ---
+#define H2H_MAX_PLAYERS     4
+#define H2H_NAME_LEN        13      // 12 display chars + null
+
+// --- Wi-Fi STA mode ---
+#define WIFI_STA_TIMEOUT        10000   // ms to wait for STA connection
+#define WIFI_MAX_SCAN_RESULTS   15      // cap network scan list
+#define NVS_NS_WIFI             "bfwifi"
+
+// --- OTA firmware updates ---
+#define OTA_MANIFEST_URL    "https://raw.githubusercontent.com/jcargile/blind-flight/main/release/version.json"
+#define OTA_CHECK_TIMEOUT   10000       // ms for manifest fetch
+#define OTA_DOWNLOAD_TIMEOUT 120000     // ms for binary download

@@ -52,9 +52,6 @@ enum TransitionType {
 #define TRANS_SLOT_FRAMES       20      // Total animation frames
 #define TRANS_SLOT_MAX_OFFSET   120     // Starting pixel offset (text distance to travel)
 
-// Spin indicator
-#define TRANS_SPIN_RADIUS       40      // Arc radius
-#define TRANS_SPIN_THICKNESS    4       // Arc line thickness
 
 // ============================================================
 // Initialization
@@ -106,19 +103,3 @@ void transSlotRoll(int x, int y, int w, int h,
                    uint16_t fgColor, uint16_t bgColor,
                    int fontSize);
 
-// Spin indicator: draws a rotating arc at (cx, cy).
-// Call repeatedly in a loop to animate — each call advances
-// the arc by one position and returns immediately.
-// Pass a persistent angle variable; it's updated each call.
-//
-// cx, cy  — center of the arc
-// color   — arc color
-// bgColor — color to erase the previous arc position
-// angle   — pointer to persistent angle state (degrees, 0–359)
-void transSpinStep(int cx, int cy,
-                   uint16_t color, uint16_t bgColor,
-                   int* angle);
-
-// Convenience: clear the spin indicator area (call once when
-// spin animation is done, before drawing final content).
-void transSpinClear(int cx, int cy, uint16_t bgColor);

@@ -23,28 +23,6 @@ void IRAM_ATTR encoderISR() {
 }
 
 // ============================================================
-// Button debounce state
-// ============================================================
-static bool lastBtnLeftState = HIGH;
-static bool lastBtnRightState = HIGH;
-static bool lastEncSwState = HIGH;
-static unsigned long lastBtnLeftTime = 0;
-static unsigned long lastBtnRightTime = 0;
-static unsigned long lastEncSwTime = 0;
-
-// Simple debounced read — returns true on falling edge (press)
-static bool readButton(int pin, bool &lastState, unsigned long &lastTime) {
-    bool reading = digitalRead(pin);
-    unsigned long now = millis();
-    if (reading != lastState && (now - lastTime) > DEBOUNCE_MS) {
-        lastTime = now;
-        lastState = reading;
-        if (reading == LOW) return true;
-    }
-    return false;
-}
-
-// ============================================================
 // Event queue — small ring buffer for pending input events
 // ============================================================
 #define EVENT_QUEUE_SIZE 8
@@ -54,9 +32,60 @@ static int eventTail = 0;
 
 static void enqueueEvent(InputEvent evt) {
     int next = (eventHead + 1) % EVENT_QUEUE_SIZE;
-    if (next != eventTail) {    // Drop if full (shouldn't happen at 1ms poll)
+    if (next != eventTail) {
         eventQueue[eventHead] = evt;
         eventHead = next;
+    }
+}
+
+// ============================================================
+// Button debounce and long-press state
+// ============================================================
+struct ButtonState {
+    bool lastReading;
+    bool pressed;               // true while held down (debounced)
+    unsigned long debounceTime; // last edge timestamp for debounce
+    unsigned long pressTime;    // millis() when press was registered
+};
+
+static ButtonState btnLeft  = { HIGH, false, 0, 0 };
+static ButtonState btnRight = { HIGH, false, 0, 0 };
+static ButtonState btnEncSw = { HIGH, false, 0, 0 };
+
+static void pollButton(int pin, ButtonState &bs,
+                        InputEvent shortEvt, InputEvent longEvt) {
+    bool reading = digitalRead(pin);
+    unsigned long now = millis();
+
+    if (reading != bs.lastReading && (now - bs.debounceTime) > DEBOUNCE_MS) {
+        bs.debounceTime = now;
+        bs.lastReading = reading;
+
+        if (reading == LOW) {
+            bs.pressed = true;
+            bs.pressTime = now;
+        } else if (bs.pressed) {
+            unsigned long held = now - bs.pressTime;
+            enqueueEvent(held >= LONG_PRESS_MS ? longEvt : shortEvt);
+            bs.pressed = false;
+        }
+    }
+}
+
+static void pollEncSw(int pin, ButtonState &bs) {
+    bool reading = digitalRead(pin);
+    unsigned long now = millis();
+    if (reading != bs.lastReading && (now - bs.debounceTime) > DEBOUNCE_MS) {
+        bs.debounceTime = now;
+        bs.lastReading = reading;
+        if (reading == LOW) {
+            bs.pressed = true;
+            bs.pressTime = now;
+        } else if (bs.pressed) {
+            unsigned long held = now - bs.pressTime;
+            enqueueEvent(held >= LONG_PRESS_MS ? INPUT_ENC_LONG : INPUT_ENC_CLICK);
+            bs.pressed = false;
+        }
     }
 }
 
@@ -89,15 +118,12 @@ void inputInit() {
 
 void inputUpdate() {
     // --- Encoder rotation ---
-    // Read atomically and convert to detent events.
-    // Each physical detent is ~2 raw counts on a KY-040.
     int raw;
     noInterrupts();
     raw = encoderPos;
     interrupts();
 
     int delta = raw - lastEncoderSnapshot;
-    // Generate one event per 2 raw counts (one detent)
     while (delta >= 2) {
         enqueueEvent(INPUT_ENC_CW);
         lastEncoderSnapshot += 2;
@@ -110,15 +136,9 @@ void inputUpdate() {
     }
 
     // --- Buttons ---
-    if (readButton(PIN_ENC_SW, lastEncSwState, lastEncSwTime)) {
-        enqueueEvent(INPUT_ENC_CLICK);
-    }
-    if (readButton(PIN_BTN_LEFT, lastBtnLeftState, lastBtnLeftTime)) {
-        enqueueEvent(INPUT_BTN_LEFT);
-    }
-    if (readButton(PIN_BTN_RIGHT, lastBtnRightState, lastBtnRightTime)) {
-        enqueueEvent(INPUT_BTN_RIGHT);
-    }
+    pollEncSw(PIN_ENC_SW, btnEncSw);
+    pollButton(PIN_BTN_LEFT, btnLeft, INPUT_BTN_LEFT, INPUT_BTN_LEFT_LONG);
+    pollButton(PIN_BTN_RIGHT, btnRight, INPUT_BTN_RIGHT, INPUT_BTN_RIGHT_LONG);
 }
 
 InputEvent inputGetEvent() {
@@ -131,24 +151,8 @@ InputEvent inputGetEvent() {
 // ============================================================
 // Inject a synthetic event (Session 16 — phone interface)
 // ============================================================
-// Wraps the same ring buffer as hardware events. Call from
-// the main loop context only (not from ISRs).
 
 void inputInjectEvent(InputEvent evt) {
     enqueueEvent(evt);
 }
 
-int inputGetEncoderPos() {
-    int raw;
-    noInterrupts();
-    raw = encoderPos;
-    interrupts();
-    return raw;
-}
-
-void inputSetEncoderPos(int pos) {
-    noInterrupts();
-    encoderPos = pos;
-    interrupts();
-    lastEncoderSnapshot = pos;
-}

@@ -69,7 +69,11 @@ void motorSetSpinSpeed(uint8_t level);
 // user's chosen pour spout location.
 void motorSetPourSide(uint8_t side);
 
-// Returns the effective pour offset (POUR_OFFSET + side adjustment).
+// Set per-unit home offset trim (microsteps, positive = CW nudge).
+// Added to POUR_OFFSET + side adjustment.
+void motorSetHomeOffset(int offset);
+
+// Returns the effective pour offset (POUR_OFFSET + side + home trim).
 int motorGetPourOffset();
 
 // Has the motor been successfully homed since power-on?

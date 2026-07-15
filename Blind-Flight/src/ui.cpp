@@ -1,6 +1,10 @@
 #include "ui.h"
 #include "config.h"
 #include "audio.h"
+#include "game.h"
+#include "motor.h"
+#include "settings.h"
+#include "transitions.h"
 
 // ============================================================
 // Internal state
@@ -11,6 +15,11 @@ static const Screen* screenStack[MAX_SCREEN_DEPTH];
 static int stackDepth = 0;
 static bool needsRedraw = false;
 
+// --- Idle timer state ---
+enum IdleState { IDLE_ACTIVE, IDLE_DIM, IDLE_OFF };
+static IdleState idleState = IDLE_ACTIVE;
+static unsigned long lastActivityMs = 0;
+
 // ============================================================
 // Screen stack management
 // ============================================================
@@ -19,6 +28,8 @@ void uiInit(TFT_eSPI* tftPtr) {
     tft = tftPtr;
     stackDepth = 0;
     needsRedraw = false;
+    lastActivityMs = millis();
+    idleState = IDLE_ACTIVE;
 
     // Share TFT pointer with transition module
     transSetTFT(tftPtr);
@@ -59,18 +70,17 @@ void uiPopScreen() {
     }
 }
 
-void uiReplaceScreen(const Screen* screen) {
-    if (stackDepth <= 0) {
-        uiPushScreen(screen);
-        return;
-    }
-    screenStack[stackDepth - 1] = screen;
+void uiGoHome() {
+    if (stackDepth <= 1) return;
+
+    Serial.printf("[UI] GoHome (depth %d → 1)\n", stackDepth);
+    gameAbort();
+    stackDepth = 1;
     needsRedraw = true;
 
-    Serial.printf("[UI] Replace → %s (depth %d)\n", screen->name, stackDepth);
-
-    if (screen->onEnter) {
-        screen->onEnter();
+    const Screen* home = screenStack[0];
+    if (home->onEnter) {
+        home->onEnter();
     }
 }
 
@@ -194,9 +204,56 @@ void uiUpdate() {
     const Screen* active = uiActiveScreen();
     if (!active) return;
 
+    // --- Idle timer check ---
+    unsigned long now = millis();
+    unsigned long idleMs = now - lastActivityMs;
+
+    if (idleState == IDLE_ACTIVE) {
+        uint16_t dimDelay = settingsGetDimDelay();
+        if (idleMs >= (unsigned long)dimDelay * 1000UL) {
+            int userBright = BRIGHT_MAP[settingsGetBrightness()];
+            int dimLevel = userBright / 4;
+            if (dimLevel < 10) dimLevel = 10;
+            setBacklight(dimLevel);
+            idleState = IDLE_DIM;
+        }
+    } else if (idleState == IDLE_DIM) {
+        uint16_t offDelay = settingsGetOffDelay();
+        if (idleMs >= (unsigned long)offDelay * 1000UL) {
+            setBacklight(0);
+            motorDisable();
+            idleState = IDLE_OFF;
+        }
+    }
+
     // Drain all pending input events to active screen
     InputEvent evt;
     while ((evt = inputGetEvent()) != INPUT_NONE) {
+        // Wake from idle — consume the event, restore brightness
+        if (idleState != IDLE_ACTIVE) {
+            bool wasOff = (idleState == IDLE_OFF);
+            setBacklight(BRIGHT_MAP[settingsGetBrightness()]);
+            idleState = IDLE_ACTIVE;
+            lastActivityMs = now;
+
+            if (wasOff) {
+                tft->fillScreen(COL_BG);
+                uiDrawCenteredText("Restoring...", SCREEN_H / 2, FONT_TITLE, COL_TEXT);
+                motorHome();
+                needsRedraw = true;
+            }
+
+            continue;  // consume this event
+        }
+
+        lastActivityMs = now;
+
+        if (evt == INPUT_BTN_LEFT_LONG && stackDepth > 1) {
+            audioPlayTone(TONE_SELECT);
+            uiGoHome();
+            return;
+        }
+
         active->handleInput(evt);
 
         // Active screen may have changed (push/pop inside handler),
@@ -219,6 +276,18 @@ void uiUpdate() {
         if (active && active->draw) {
             active->draw(false);
         }
+    }
+}
+
+// ============================================================
+// Idle timer API
+// ============================================================
+
+void uiResetIdleTimer() {
+    lastActivityMs = millis();
+    if (idleState != IDLE_ACTIVE) {
+        setBacklight(BRIGHT_MAP[settingsGetBrightness()]);
+        idleState = IDLE_ACTIVE;
     }
 }
 
@@ -273,10 +342,29 @@ void uiDrawMenuItem(int index, const char* text, bool selected) {
         tft->fillRoundRect(MENU_ITEM_X, y, 4, MENU_ITEM_H - 2, 2, COL_ACCENT);
     }
 
+    int menuTextMaxW = MENU_ITEM_W - 18;
     tft->setTextColor(fgColor, bgColor);
     tft->setTextSize(FONT_BODY);
     tft->setTextDatum(ML_DATUM);
-    tft->drawString(text, MENU_ITEM_X + 14, y + (MENU_ITEM_H - 2) / 2);
+
+    if (tft->textWidth(text) > menuTextMaxW) {
+        char truncBuf[32];
+        int maxChars = 0;
+        for (int i = 0; text[i] && i < 28; i++) {
+            truncBuf[i] = text[i];
+            truncBuf[i + 1] = '\0';
+            if (tft->textWidth(truncBuf) > menuTextMaxW - tft->textWidth("..")) {
+                break;
+            }
+            maxChars = i + 1;
+        }
+        truncBuf[maxChars] = '.';
+        truncBuf[maxChars + 1] = '.';
+        truncBuf[maxChars + 2] = '\0';
+        tft->drawString(truncBuf, MENU_ITEM_X + 14, y + (MENU_ITEM_H - 2) / 2);
+    } else {
+        tft->drawString(text, MENU_ITEM_X + 14, y + (MENU_ITEM_H - 2) / 2);
+    }
 }
 
 void uiDrawCenteredText(const char* text, int y, int fontSize, uint16_t color) {
@@ -286,8 +374,68 @@ void uiDrawCenteredText(const char* text, int y, int fontSize, uint16_t color) {
     tft->drawString(text, SCREEN_W / 2, y);
 }
 
+int uiDrawCenteredTextWrap(const char* text, int y, int fontSize,
+                           uint16_t color, int maxWidth) {
+    if (!text || !text[0]) return y;
+    if (maxWidth <= 0) maxWidth = SCREEN_W - 16;
+
+    tft->setTextSize(fontSize);
+    int textW = tft->textWidth(text);
+
+    if (textW <= maxWidth) {
+        uiDrawCenteredText(text, y, fontSize, color);
+        int lineH = fontSize * 8 + 4;
+        return y + lineH;
+    }
+
+    // Try smaller font first
+    if (fontSize > FONT_SMALL) {
+        int smallW = 0;
+        tft->setTextSize(fontSize - 1);
+        smallW = tft->textWidth(text);
+        if (smallW <= maxWidth) {
+            uiDrawCenteredText(text, y, fontSize - 1, color);
+            int lineH = (fontSize - 1) * 8 + 4;
+            return y + lineH;
+        }
+    }
+
+    // Word-wrap: find the last space that keeps line 1 within maxWidth
+    tft->setTextSize(fontSize);
+    int len = strlen(text);
+    int splitAt = -1;
+    char line1[64];
+
+    for (int i = 0; i < len && i < 63; i++) {
+        if (text[i] == ' ') {
+            memcpy(line1, text, i);
+            line1[i] = '\0';
+            if (tft->textWidth(line1) <= maxWidth) {
+                splitAt = i;
+            } else {
+                break;
+            }
+        }
+    }
+
+    if (splitAt > 0) {
+        memcpy(line1, text, splitAt);
+        line1[splitAt] = '\0';
+        const char* line2 = text + splitAt + 1;
+        int lineH = fontSize * 8 + 4;
+        uiDrawCenteredText(line1, y, fontSize, color);
+        uiDrawCenteredText(line2, y + lineH, fontSize, color);
+        return y + lineH * 2;
+    }
+
+    // No space found — just draw it (clipped)
+    uiDrawCenteredText(text, y, fontSize, color);
+    int lineH = fontSize * 8 + 4;
+    return y + lineH;
+}
+
 void uiDrawHint(const char* text, int y) {
-    uiDrawCenteredText(text, y, FONT_BODY, COL_DIM);
+    uiDrawCenteredTextWrap(text, y, FONT_BODY, COL_DIM);
 }
 
 void uiClearContent() {
@@ -363,12 +511,31 @@ static void drawListItem(ScrollList* list, int slot, int itemIndex, bool selecte
         tft->fillRoundRect(MENU_ITEM_X, y, 4, MENU_ITEM_H - 2, 2, COL_ACCENT);
     }
 
-    // Item text
+    int textX = MENU_ITEM_X + 14;
+    int textMaxW = itemW - 18;
     tft->setTextColor(fgColor, bgColor);
     tft->setTextSize(FONT_BODY);
     tft->setTextDatum(ML_DATUM);
-    tft->drawString(list->items[itemIndex], MENU_ITEM_X + 14,
-                    y + (MENU_ITEM_H - 2) / 2);
+
+    const char* itemText = list->items[itemIndex];
+    if (tft->textWidth(itemText) > textMaxW) {
+        char truncBuf[32];
+        int maxChars = 0;
+        for (int i = 0; itemText[i] && i < 28; i++) {
+            truncBuf[i] = itemText[i];
+            truncBuf[i + 1] = '\0';
+            if (tft->textWidth(truncBuf) > textMaxW - tft->textWidth("..")) {
+                break;
+            }
+            maxChars = i + 1;
+        }
+        truncBuf[maxChars] = '.';
+        truncBuf[maxChars + 1] = '.';
+        truncBuf[maxChars + 2] = '\0';
+        tft->drawString(truncBuf, textX, y + (MENU_ITEM_H - 2) / 2);
+    } else {
+        tft->drawString(itemText, textX, y + (MENU_ITEM_H - 2) / 2);
+    }
 }
 
 void uiScrollListDraw(ScrollList* list) {

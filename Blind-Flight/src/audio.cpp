@@ -164,10 +164,6 @@ void audioStopTone() {
     currentSequence = nullptr;
 }
 
-bool audioIsPlaying() {
-    return toneActive;
-}
-
 // ============================================================
 // Volume / Mute (Session 17)
 // ============================================================
@@ -191,5 +187,4 @@ void audioSetVolume(uint8_t level) {
     }
 }
 
-bool audioGetMute()       { return sMuted; }
 uint8_t audioGetVolume()  { return sVolLvl; }

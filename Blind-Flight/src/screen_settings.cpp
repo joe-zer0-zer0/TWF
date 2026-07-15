@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "transitions.h"
 #include "wifi_portal.h"
+#include "favorites.h"
 
 // ============================================================
 // Blind Flight — Settings Screen (Session 17)
@@ -19,12 +20,19 @@ enum SettingsItem {
     SET_SOUND = 0,
     SET_BRIGHT,
     SET_WIFI,
+    SET_WIFISETUP,
     SET_SPEED,
     SET_POURSIDE,
+    SET_GLASSES,
+    SET_DIM_DELAY,
+    SET_OFF_DELAY,
+    SET_FAVORITES,
+    SET_CALIBRATE,
     SET_REHOME,
     SET_MOTORTEST,
     SET_ABOUT,
-    SET_COUNT       // 8
+    SET_UPDATE,
+    SET_COUNT       // 15
 };
 
 // How many items fit in the content area
@@ -88,12 +96,19 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
     switch (itemIdx) {
         case SET_SOUND:  label = "Sound";      break;
         case SET_BRIGHT: label = "Brightness"; break;
-        case SET_WIFI:   label = "Wi-Fi";      break;
+        case SET_WIFI:      label = "Wi-Fi";      break;
+        case SET_WIFISETUP: label = "Wi-Fi Setup"; break;
         case SET_SPEED:    label = "Spin Speed"; break;
-        case SET_POURSIDE: label = "Pour Side";  break;
-        case SET_REHOME:   label = "Re-Home";    break;
+        case SET_POURSIDE:  label = "Pour Side";  break;
+        case SET_GLASSES:   label = "Glasses";   break;
+        case SET_DIM_DELAY: label = "Dim";       break;
+        case SET_OFF_DELAY: label = "Sleep";     break;
+        case SET_FAVORITES: label = "Favorites"; break;
+        case SET_CALIBRATE: label = "Calibrate"; break;
+        case SET_REHOME:    label = "Re-Home";   break;
         case SET_MOTORTEST: label = "Motor Test"; break;
-        case SET_ABOUT:  label = "About";      break;
+        case SET_ABOUT:     label = "About";     break;
+        case SET_UPDATE:    label = "Update";    break;
     }
     tft->setTextColor(labelCol, bgCol);
     tft->drawString(label, x + 4, textY);
@@ -147,6 +162,58 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
             uint8_t ps = editing ? (uint8_t)dispValue : settingsGetPourSide();
             if (ps > 3) ps = 3;
             snprintf(valBuf, sizeof(valBuf), "%s", pourSideLabels[ps]);
+            break;
+        }
+        case SET_GLASSES: {
+            uint8_t gc = editing ? (uint8_t)dispValue : settingsGetGlassCount();
+            snprintf(valBuf, sizeof(valBuf), "%d", gc);
+            break;
+        }
+        case SET_DIM_DELAY: {
+            uint16_t d = editing ? (uint16_t)dispValue : settingsGetDimDelay();
+            if (d >= 60) {
+                snprintf(valBuf, sizeof(valBuf), "%dm", d / 60);
+            } else {
+                snprintf(valBuf, sizeof(valBuf), "%ds", d);
+            }
+            break;
+        }
+        case SET_OFF_DELAY: {
+            uint16_t d = editing ? (uint16_t)dispValue : settingsGetOffDelay();
+            snprintf(valBuf, sizeof(valBuf), "%dm", d / 60);
+            break;
+        }
+        case SET_FAVORITES: {
+            snprintf(valBuf, sizeof(valBuf), "%d/%d >", favoritesGetCount(), FAV_MAX_COUNT);
+            break;
+        }
+        case SET_CALIBRATE: {
+            int16_t off = settingsGetHomeOffset();
+            if (off == 0) {
+                snprintf(valBuf, sizeof(valBuf), "0 >");
+            } else {
+                snprintf(valBuf, sizeof(valBuf), "%+d >", off);
+            }
+            break;
+        }
+        case SET_WIFISETUP: {
+            if (wifiIsSTAMode()) {
+                snprintf(valBuf, sizeof(valBuf), "STA >");
+            } else if (wifiHasCredentials()) {
+                snprintf(valBuf, sizeof(valBuf), "AP >");
+            } else {
+                tft->setTextColor(COL_DIM, bgCol);
+                snprintf(valBuf, sizeof(valBuf), ">");
+            }
+            break;
+        }
+        case SET_UPDATE: {
+            if (wifiIsSTAMode()) {
+                snprintf(valBuf, sizeof(valBuf), "v%s >", FW_VERSION);
+            } else {
+                tft->setTextColor(COL_DIM, bgCol);
+                snprintf(valBuf, sizeof(valBuf), "No Wi-Fi");
+            }
             break;
         }
         case SET_REHOME:
@@ -232,6 +299,15 @@ static void editStart() {
         case SET_POURSIDE:
             editValue = settingsGetPourSide();
             break;
+        case SET_GLASSES:
+            editValue = settingsGetGlassCount();
+            break;
+        case SET_DIM_DELAY:
+            editValue = settingsGetDimDelay();
+            break;
+        case SET_OFF_DELAY:
+            editValue = settingsGetOffDelay();
+            break;
         default:
             editMode = false;
             break;
@@ -271,6 +347,15 @@ static void editApply() {
         case SET_POURSIDE:
             settingsSetPourSide(editValue);
             motorSetPourSide(editValue);
+            break;
+        case SET_GLASSES:
+            settingsSetGlassCount(editValue);
+            break;
+        case SET_DIM_DELAY:
+            settingsSetDimDelay(editValue);
+            break;
+        case SET_OFF_DELAY:
+            settingsSetOffDelay(editValue);
             break;
     }
     editMode = false;
@@ -315,8 +400,23 @@ static void editAdjust(int delta) {
             break;
         case SET_POURSIDE:
             editValue += delta;
-            if (editValue < 0) editValue = 3;   // wrap around
+            if (editValue < 0) editValue = 3;
             if (editValue > 3) editValue = 0;
+            break;
+        case SET_GLASSES:
+            editValue += delta;
+            if (editValue < 2) editValue = 2;
+            if (editValue > 4) editValue = 4;
+            break;
+        case SET_DIM_DELAY:
+            editValue += delta * 30;  // 30s steps
+            if (editValue < 30)  editValue = 30;
+            if (editValue > 300) editValue = 300;
+            break;
+        case SET_OFF_DELAY:
+            editValue += delta * 60;  // 1m steps
+            if (editValue < 120)  editValue = 120;
+            if (editValue > 1800) editValue = 1800;
             break;
     }
 }
@@ -426,6 +526,15 @@ static void settingsInput(InputEvent evt) {
             }
             break;
 
+        case INPUT_ENC_LONG:
+            if (setSelected == SET_ABOUT) {
+                // Hidden: long-press encoder on About opens diagnostics
+                audioPlayTone(TONE_CONFIRM);
+                extern const Screen screenDiagnostics;
+                uiPushScreenT(&screenDiagnostics, TRANS_WIPE_LEFT);
+            }
+            break;
+
         case INPUT_BTN_RIGHT:
         case INPUT_ENC_CLICK:
             if (setSelected == SET_REHOME) {
@@ -438,11 +547,31 @@ static void settingsInput(InputEvent evt) {
                 audioPlayTone(TONE_SELECT);
                 extern const Screen screenAbout;
                 uiPushScreenT(&screenAbout, TRANS_WIPE_LEFT);
+            } else if (setSelected == SET_FAVORITES) {
+                audioPlayTone(TONE_SELECT);
+                extern const Screen screenFavorites;
+                uiPushScreenT(&screenFavorites, TRANS_WIPE_LEFT);
+            } else if (setSelected == SET_WIFISETUP) {
+                audioPlayTone(TONE_SELECT);
+                extern const Screen screenWifiSetup;
+                uiPushScreenT(&screenWifiSetup, TRANS_WIPE_LEFT);
+            } else if (setSelected == SET_CALIBRATE) {
+                audioPlayTone(TONE_SELECT);
+                extern const Screen screenCalibrate;
+                uiPushScreenT(&screenCalibrate, TRANS_WIPE_LEFT);
             } else if (setSelected == SET_MOTORTEST) {
                 // Push motor diagnostics screen
                 audioPlayTone(TONE_SELECT);
                 extern const Screen screenMotorTest;
                 uiPushScreenT(&screenMotorTest, TRANS_WIPE_LEFT);
+            } else if (setSelected == SET_UPDATE) {
+                if (wifiIsSTAMode()) {
+                    audioPlayTone(TONE_SELECT);
+                    extern const Screen screenOtaUpdate;
+                    uiPushScreenT(&screenOtaUpdate, TRANS_WIPE_LEFT);
+                } else {
+                    audioPlayTone(TONE_ERROR);
+                }
             } else {
                 // Enter edit mode for value items
                 editStart();
@@ -489,8 +618,8 @@ static void aboutDrawValues() {
 
     int labelX = 16;
     int valX   = SCREEN_W - 16;
-    int startY = 90;
-    int lineH  = 28;
+    int startY = 80;
+    int lineH  = 24;
 
     tft->setTextSize(FONT_BODY);
 
@@ -506,7 +635,11 @@ static void aboutDrawValues() {
     y = startY + 2 * lineH;
     tft->fillRect(120, y - 8, 120, 20, COL_BG);
     if (wifiPortalIsRunning()) {
-        snprintf(buf, sizeof(buf), "%d clients", aboutLastClients);
+        if (wifiIsSTAMode()) {
+            snprintf(buf, sizeof(buf), "STA %dc", aboutLastClients);
+        } else {
+            snprintf(buf, sizeof(buf), "AP %dc", aboutLastClients);
+        }
         tft->setTextColor(COL_SELECTED, COL_BG);
     } else {
         snprintf(buf, sizeof(buf), "OFF");
@@ -524,8 +657,8 @@ static void aboutDraw(bool fullRedraw) {
         uiDrawTitleBar("ABOUT", COL_HOME);
 
         int labelX = 16;
-        int startY = 90;
-        int lineH  = 28;
+        int startY = 80;
+        int lineH  = 24;
 
         // Version
         tft->setTextSize(FONT_BODY);
@@ -548,7 +681,30 @@ static void aboutDraw(bool fullRedraw) {
         y += lineH;
         tft->drawString("Wi-Fi", labelX, y);
 
+        // SSID (if connected)
+        if (wifiPortalIsRunning() && wifiIsSTAMode()) {
+            y += lineH;
+            tft->setTextSize(FONT_SMALL);
+            tft->setTextDatum(ML_DATUM);
+            tft->setTextColor(COL_DIM, COL_BG);
+            tft->drawString("SSID", labelX + 8, y);
+            tft->setTextDatum(MR_DATUM);
+            tft->setTextColor(COL_ACCENT, COL_BG);
+            tft->drawString(wifiGetSSID(), SCREEN_W - 16, y);
+
+            y += 16;
+            tft->setTextDatum(ML_DATUM);
+            tft->setTextColor(COL_DIM, COL_BG);
+            tft->drawString("IP", labelX + 8, y);
+            tft->setTextDatum(MR_DATUM);
+            tft->setTextColor(COL_ACCENT, COL_BG);
+            tft->drawString(wifiGetIP(), SCREEN_W - 16, y);
+            tft->setTextSize(FONT_BODY);
+        }
+
         y += lineH;
+        tft->setTextDatum(ML_DATUM);
+        tft->setTextColor(COL_TEXT, COL_BG);
         tft->drawString("Glasses", labelX, y);
         tft->setTextDatum(MR_DATUM);
         tft->setTextColor(COL_ACCENT, COL_BG);
