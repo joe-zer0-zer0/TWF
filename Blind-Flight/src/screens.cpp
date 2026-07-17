@@ -150,6 +150,20 @@ const Screen screenHome = {
 // visible slots, all items are visible without scrolling.
 // ============================================================
 
+static void menuDrawSubmenuIndicators() {
+    TFT_eSPI* tft = uiGetTFT();
+    // Draw right-pointing triangle on submenu items (indices 3, 4)
+    for (int idx = 3; idx <= 4; idx++) {
+        int slot = idx - menuList.scrollOffset;
+        if (slot < 0 || slot >= menuList.visibleCount) continue;
+        int itemY = CONTENT_Y + 4 + slot * MENU_ITEM_H;
+        int cy = itemY + (MENU_ITEM_H - 2) / 2;
+        int tx = MENU_ITEM_W - 4;
+        uint16_t col = (idx == menuList.selected) ? COL_ACCENT : COL_DIM;
+        tft->fillTriangle(tx, cy - 5, tx, cy + 5, tx + 6, cy, col);
+    }
+}
+
 static void menuDraw(bool fullRedraw) {
     if (!fullRedraw) return;
 
@@ -158,6 +172,7 @@ static void menuDraw(bool fullRedraw) {
 
     uiDrawTitleBar("SELECT MODE", COL_HOME);
     uiScrollListDraw(&menuList);
+    menuDrawSubmenuIndicators();
     uiDrawSoftButtons("BACK", "SELECT");
 }
 
@@ -166,8 +181,12 @@ static void menuOnEnter() {
 }
 
 static void menuInput(InputEvent evt) {
-    // Let ScrollList handle encoder rotation and click
     int sel = uiScrollListHandleInput(&menuList, evt);
+
+    // Redraw submenu indicators after list redraws on scroll/selection change
+    if (evt == INPUT_ENC_CW || evt == INPUT_ENC_CCW) {
+        menuDrawSubmenuIndicators();
+    }
 
     if (sel >= 0) {
         audioPlayTone(TONE_CONFIRM);

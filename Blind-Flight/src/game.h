@@ -38,6 +38,7 @@ enum GameMode {
     GAME_MODE_NAMED,    // Browse library for names (Session 12)
     GAME_MODE_GUESS,    // Browse library + guessing round (Session 13)
     GAME_MODE_RANK,     // Browse library + ranking round (Session 20)
+    GAME_MODE_GUESS_RANK, // Browse library + ranking then guessing
     GAME_MODE_DUPLICATE,// Twin Pour: 3 bottles, one duplicated (Session 22)
     GAME_MODE_DECOY,    // Find the Ringer: 2 bottles, 3+1 split (Session 22)
     GAME_MODE_H2H       // Head-to-Head multiplayer (Session 23)

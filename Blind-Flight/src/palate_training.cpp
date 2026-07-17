@@ -5,9 +5,10 @@
 #include "screens.h"
 
 static ScrollList ptList;
-static const int PT_MODE_COUNT = 3;
+static const int PT_MODE_COUNT = 4;
 static const char* ptLabels[PT_MODE_COUNT] = {
     "Best Guess",
+    "Guess + Ranked",
     "Twin Pour",
     "Find the Ringer"
 };
@@ -32,6 +33,8 @@ static void ptInput(InputEvent evt) {
         if (sel == 0) {
             gameSetMode(GAME_MODE_GUESS);
         } else if (sel == 1) {
+            gameSetMode(GAME_MODE_GUESS_RANK);
+        } else if (sel == 2) {
             gameSetMode(GAME_MODE_DUPLICATE);
         } else {
             gameSetMode(GAME_MODE_DECOY);

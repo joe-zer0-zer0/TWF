@@ -668,6 +668,7 @@ static int buildStateJSON(char* buf, int bufLen) {
         case GAME_MODE_NAMED:     mc = "N"; break;
         case GAME_MODE_GUESS:     mc = "G"; break;
         case GAME_MODE_RANK:      mc = "R"; break;
+        case GAME_MODE_GUESS_RANK: mc = "Q"; break;
         case GAME_MODE_DUPLICATE: mc = "D"; break;
         case GAME_MODE_DECOY:     mc = "Y"; break;
         default:                  mc = "?"; break;

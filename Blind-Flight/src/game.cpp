@@ -66,6 +66,9 @@ struct RevealEntry {
 static RevealEntry revealMap[NUM_GLASSES];
 static int revealMapCount;
 
+// --- Guess+Ranked: per-glass correctness (computed before revealMap rebuild) ---
+static bool guessCorrectForGlass[NUM_GLASSES]; // indexed by glass number - 1
+
 // --- Guessing round pool (Session 13) ---
 static const char* guessPoolLabels[NUM_GLASSES];
 static int guessPoolPourIdx[NUM_GLASSES];
@@ -111,7 +114,7 @@ static void flushInput() {
 // Returns true for modes that use the browse library for names (per-glass)
 static bool modeUsesNames() {
     return currentMode == GAME_MODE_NAMED || currentMode == GAME_MODE_GUESS
-        || currentMode == GAME_MODE_RANK;
+        || currentMode == GAME_MODE_RANK  || currentMode == GAME_MODE_GUESS_RANK;
 }
 
 // Returns true for challenge modes (Duplicate/Decoy)
@@ -125,6 +128,7 @@ static const char* getModeTitleText() {
         case GAME_MODE_NAMED:     return "NAMED FLIGHT";
         case GAME_MODE_GUESS:     return "BEST GUESS";
         case GAME_MODE_RANK:      return "RANKED FLIGHT";
+        case GAME_MODE_GUESS_RANK: return "GUESS + RANKED";
         case GAME_MODE_DUPLICATE: return "TWIN POUR";
         case GAME_MODE_DECOY:     return "FIND THE RINGER";
         default:                  return "QUICK FLIGHT";
@@ -830,7 +834,7 @@ static void drawTasting(bool fullRedraw) {
     } else if (currentMode == GAME_MODE_GUESS) {
         uiDrawHint("Press to Guess",    CONTENT_Y + 150);
         uiDrawSoftButtons("", "NEXT");
-    } else if (currentMode == GAME_MODE_RANK) {
+    } else if (currentMode == GAME_MODE_RANK || currentMode == GAME_MODE_GUESS_RANK) {
         uiDrawHint("Press to Rank",     CONTENT_Y + 150);
         uiDrawSoftButtons("", "NEXT");
     } else {
@@ -1119,7 +1123,7 @@ static void drawReveal(bool fullRedraw) {
 
     // --- Rank or pour number below the name ---
     int metaY;
-    if (currentMode == GAME_MODE_RANK) {
+    if (currentMode == GAME_MODE_RANK || currentMode == GAME_MODE_GUESS_RANK) {
         // revealMap is reversed: idx 0 = last place, so map back to rank
         int rank = revealMapCount - 1 - idx;
         uiDrawCenteredText(ordinalRevealStr(rank), CONTENT_Y + 80, FONT_SMALL, COL_DIM);
@@ -1188,7 +1192,7 @@ static void drawDone(bool fullRedraw) {
     int y = CONTENT_Y + 30;
     int leftX = 16;
 
-    if (currentMode == GAME_MODE_RANK) {
+    if (currentMode == GAME_MODE_RANK || currentMode == GAME_MODE_GUESS_RANK) {
         // Results in rank order (1st to last): revealMap is reversed,
         // so iterate backwards to show #1 first
         for (int i = revealMapCount - 1; i >= 0; i--) {
@@ -1197,7 +1201,6 @@ static void drawDone(bool fullRedraw) {
             int pourIdx = revealMap[i].pourIdx;
             const char* name = session.glassName[pourIdx][0] ? session.glassName[pourIdx] : "?";
 
-            // Rank number in dim color
             char rankStr[8];
             snprintf(rankStr, sizeof(rankStr), "#%d ", rank);
             tft->setTextSize(FONT_BODY);
@@ -1206,11 +1209,15 @@ static void drawDone(bool fullRedraw) {
             tft->drawString(rankStr, leftX, y + 10);
             int rankW = tft->textWidth(rankStr);
 
-            // Glass number and name in accent color
+            uint16_t nameCol = COL_ACCENT;
+            if (currentMode == GAME_MODE_GUESS_RANK) {
+                nameCol = guessCorrectForGlass[glass - 1] ? COL_CORRECT : COL_ERROR;
+            }
+
             char glassName[40];
             snprintf(glassName, sizeof(glassName), "%d. %s", glass, name);
             int lineMaxW = SCREEN_W - leftX - 16 - rankW;
-            tft->setTextColor(COL_ACCENT, COL_BG);
+            tft->setTextColor(nameCol, COL_BG);
             if (tft->textWidth(glassName) > lineMaxW) {
                 char truncBuf[40];
                 int maxChars = 0;
@@ -1266,6 +1273,17 @@ static void drawDone(bool fullRedraw) {
             }
             y += 28;
         }
+    }
+
+    if (currentMode == GAME_MODE_GUESS_RANK) {
+        int correct = 0;
+        for (int i = 0; i < NUM_GLASSES; i++) {
+            if (guessCorrectForGlass[i]) correct++;
+        }
+        char scoreBuf[20];
+        snprintf(scoreBuf, sizeof(scoreBuf), "Guessed %d of %d", correct, revealMapCount);
+        uiDrawCenteredText(scoreBuf, y + 4, FONT_SMALL, COL_DIM);
+        y += 14;
     }
 
     uiDrawHint("New flight or exit", y + 4);
@@ -1600,7 +1618,7 @@ static void gameInput(InputEvent evt) {
                         state = GAME_CHALLENGE_GUESS;
                         flushInput();
                         uiRequestRedraw();
-                    } else if (currentMode == GAME_MODE_RANK) {
+                    } else if (currentMode == GAME_MODE_RANK || currentMode == GAME_MODE_GUESS_RANK) {
                         initRanking(false);
                     } else if (currentMode == GAME_MODE_GUESS) {
                         initGuessing(false);
@@ -1646,7 +1664,7 @@ static void gameInput(InputEvent evt) {
                     // Rating complete — advance to mode-specific next step
                     if (currentMode == GAME_MODE_GUESS) {
                         initGuessing(false);
-                    } else if (currentMode == GAME_MODE_RANK) {
+                    } else if (currentMode == GAME_MODE_RANK || currentMode == GAME_MODE_GUESS_RANK) {
                         initRanking(false);
                     } else {
                         session.revealIndex = 0;
@@ -1664,7 +1682,7 @@ static void gameInput(InputEvent evt) {
                 }
                 if (currentMode == GAME_MODE_GUESS) {
                     initGuessing(false);
-                } else if (currentMode == GAME_MODE_RANK) {
+                } else if (currentMode == GAME_MODE_RANK || currentMode == GAME_MODE_GUESS_RANK) {
                     initRanking(false);
                 } else {
                     session.revealIndex = 0;
@@ -1738,14 +1756,21 @@ static void gameInput(InputEvent evt) {
 
         case GAME_GUESS_DETAIL:
             if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
-                // Advance to standard reveal
+                if (currentMode == GAME_MODE_GUESS_RANK) {
+                    // Save per-glass correctness before revealMap is rebuilt
+                    for (int i = 0; i < NUM_GLASSES; i++) guessCorrectForGlass[i] = false;
+                    for (int r = 0; r < revealMapCount; r++) {
+                        int g = revealMap[r].glass;
+                        guessCorrectForGlass[g - 1] = (session.guessForGlass[r] == revealMap[r].pourIdx);
+                    }
+                    buildRevealMapFromRank();
+                }
                 session.revealIndex = 0;
                 state = GAME_REVEAL;
                 audioPlayTone(TONE_HOME_FOUND);
                 flushInput();
                 uiRequestRedraw();
             } else if (evt == INPUT_BTN_LEFT) {
-                // Back to guessing round at Glass 1, preserving guesses
                 audioPlayTone(TONE_SELECT);
                 initGuessing(true);
             }
@@ -1766,12 +1791,17 @@ static void gameInput(InputEvent evt) {
                     buildRankPool();
                     uiRequestRedraw();
                 } else {
-                    buildRevealMapFromRank();
-                    session.revealIndex = 0;
-                    state = GAME_REVEAL;
-                    audioPlayTone(TONE_HOME_FOUND);
-                    flushInput();
-                    uiRequestRedraw();
+                    if (currentMode == GAME_MODE_GUESS_RANK) {
+                        // Ranking done — now enter guessing round
+                        initGuessing(false);
+                    } else {
+                        buildRevealMapFromRank();
+                        session.revealIndex = 0;
+                        state = GAME_REVEAL;
+                        audioPlayTone(TONE_HOME_FOUND);
+                        flushInput();
+                        uiRequestRedraw();
+                    }
                 }
             } else if (evt == INPUT_BTN_LEFT) {
                 audioPlayTone(TONE_SELECT);

@@ -121,6 +121,7 @@ const char* persistGetModeName() {
         case GAME_MODE_NAMED:     return "Full Flight";
         case GAME_MODE_GUESS:     return "Best Guess";
         case GAME_MODE_RANK:      return "Ranked Flight";
+        case GAME_MODE_GUESS_RANK: return "Guess + Ranked";
         case GAME_MODE_DUPLICATE: return "Twin Pour";
         case GAME_MODE_DECOY:     return "Find the Ringer";
         default:                  return "Flight";
