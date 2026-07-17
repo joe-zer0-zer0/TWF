@@ -4,6 +4,7 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include <esp_ota_ops.h>
+#include <mbedtls/md.h>
 
 // ============================================================
 // Blind Flight — OTA Firmware Update Module
@@ -141,6 +142,7 @@ bool otaCheckForUpdate(const char* manifestUrl, OtaUpdateInfo& info,
 // ============================================================
 
 bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
+                      const char* expectedSha256,
                       OtaProgressCallback progressCb,
                       char* errMsg, int errMsgLen) {
     HTTPClient http;
@@ -173,6 +175,15 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
         return false;
     }
 
+    // Initialize SHA-256 context if hash is provided
+    bool doHash = (expectedSha256 && expectedSha256[0]);
+    mbedtls_md_context_t mdCtx;
+    if (doHash) {
+        mbedtls_md_init(&mdCtx);
+        mbedtls_md_setup(&mdCtx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
+        mbedtls_md_starts(&mdCtx);
+    }
+
     WiFiClient* stream = http.getStreamPtr();
     uint8_t buf[1024];
     uint32_t written = 0;
@@ -190,8 +201,13 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
         int bytesRead = stream->readBytes(buf, toRead);
         if (bytesRead <= 0) break;
 
+        if (doHash) {
+            mbedtls_md_update(&mdCtx, buf, bytesRead);
+        }
+
         int bytesWritten = Update.write(buf, bytesRead);
         if (bytesWritten != bytesRead) {
+            if (doHash) mbedtls_md_free(&mdCtx);
             Update.abort();
             http.end();
             snprintf(errMsg, errMsgLen, "Flash write error");
@@ -209,9 +225,31 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
     http.end();
 
     if (written != (uint32_t)contentLength) {
+        if (doHash) mbedtls_md_free(&mdCtx);
         Update.abort();
         snprintf(errMsg, errMsgLen, "Incomplete download");
         return false;
+    }
+
+    // Verify SHA-256 hash
+    if (doHash) {
+        uint8_t hash[32];
+        mbedtls_md_finish(&mdCtx, hash);
+        mbedtls_md_free(&mdCtx);
+
+        char hexHash[65];
+        for (int i = 0; i < 32; i++) {
+            snprintf(hexHash + i * 2, 3, "%02x", hash[i]);
+        }
+
+        if (strcasecmp(hexHash, expectedSha256) != 0) {
+            Update.abort();
+            snprintf(errMsg, errMsgLen, "Hash mismatch");
+            Serial.printf("[OTA] SHA-256 mismatch!\n  Expected: %s\n  Got:      %s\n",
+                          expectedSha256, hexHash);
+            return false;
+        }
+        Serial.println("[OTA] SHA-256 verified OK");
     }
 
     if (!Update.end(true)) {

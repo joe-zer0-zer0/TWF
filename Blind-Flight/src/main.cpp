@@ -17,6 +17,7 @@
 #include "persist.h"
 #include "favorites.h"
 #include "ota.h"
+#include "device_id.h"
 
 // ============================================================
 // Blind Flight — Session 17: Settings & Persistent Preferences
@@ -44,6 +45,9 @@ void setup() {
 
     // Confirm current firmware is valid (prevents OTA rollback)
     otaMarkValid();
+
+    // --- Device identity (must be before Wi-Fi — password derived from MAC) ---
+    deviceIdInit();
 
     // --- Persistent settings (must be first — other modules read from it) ---
     settingsInit();

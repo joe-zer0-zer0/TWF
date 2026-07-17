@@ -44,5 +44,6 @@ bool otaCheckForUpdate(const char* manifestUrl, OtaUpdateInfo& info,
 // Returns false on failure (errMsg filled).
 // progressCb is called periodically for UI updates.
 bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
+                      const char* expectedSha256,
                       OtaProgressCallback progressCb,
                       char* errMsg, int errMsgLen);

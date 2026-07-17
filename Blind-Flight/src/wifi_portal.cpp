@@ -4,6 +4,9 @@
 #include "config.h"
 #include "input.h"
 #include "favorites.h"
+#include "device_id.h"
+#include "screens.h"
+#include "transitions.h"
 
 #include <WiFi.h>
 #include <DNSServer.h>
@@ -18,9 +21,20 @@
 
 // --- Network configuration ---
 static const char* AP_SSID     = "BlindFlight";
-static const char* AP_PASSWORD = nullptr;
+static char  apPassword[9]     = "";   // generated from MAC at init
 static const byte  DNS_PORT    = 53;
 static const char* MDNS_NAME   = "flight";
+
+// --- WebSocket authentication ---
+static char wsPIN[5] = "";             // 4-digit PIN displayed on device
+static bool clientAuthed[5] = {};      // indexed by WebSocket client number
+
+// --- Pending wifi_connect confirmation ---
+static bool  pendingWifiConnect = false;
+static char  pendingSSID[33]    = "";
+static char  pendingPass[64]    = "";
+static unsigned long pendingWifiMs = 0;
+#define WIFI_CONFIRM_TIMEOUT 30000
 
 // --- Module instances ---
 static DNSServer         dnsServer;
@@ -35,6 +49,7 @@ static char savedPass[64] = "";
 
 // --- Forward declarations ---
 static void buildAndBroadcastH2H();
+static void handleWifiConnect(const char* ssid, const char* pass);
 
 // --- State broadcast tracking ---
 static unsigned long lastBroadcastMs = 0;
@@ -121,6 +136,56 @@ int8_t wifiGetRSSI() {
         return WiFi.RSSI();
     }
     return 0;
+}
+
+const char* wifiGetAPPassword() {
+    return apPassword;
+}
+
+const char* wifiGetPIN() {
+    return wsPIN;
+}
+
+bool wifiGetPendingConnect() {
+    return pendingWifiConnect;
+}
+
+const char* wifiGetPendingSSID() {
+    return pendingSSID;
+}
+
+void wifiConfirmConnect(bool confirm) {
+    if (!pendingWifiConnect) return;
+    pendingWifiConnect = false;
+    if (confirm) {
+        handleWifiConnect(pendingSSID, pendingPass);
+    } else {
+        wsServer.broadcastTXT("{\"t\":\"wifi_status\",\"ok\":false}");
+    }
+    pendingSSID[0] = '\0';
+    pendingPass[0] = '\0';
+}
+
+static void generateAPPassword() {
+    static const char chars[] = "abcdefghjkmnpqrstuvwxyz23456789";
+    uint64_t mac = deviceGetMAC();
+    uint8_t* m = (uint8_t*)&mac;
+
+    uint32_t seed = m[0] | (m[1] << 8) | (m[2] << 16) | (m[3] << 24);
+    seed ^= m[4] | (m[5] << 8);
+
+    for (int i = 0; i < 8; i++) {
+        seed = seed * 1103515245 + 12345;
+        apPassword[i] = chars[(seed >> 16) % (sizeof(chars) - 1)];
+    }
+    apPassword[8] = '\0';
+    Serial.printf("[WiFi] AP password: %s\n", apPassword);
+}
+
+static void generatePIN() {
+    uint32_t r = esp_random();
+    snprintf(wsPIN, sizeof(wsPIN), "%04u", r % 10000);
+    Serial.printf("[WiFi] WebSocket PIN: %s\n", wsPIN);
 }
 
 // ============================================================
@@ -211,7 +276,14 @@ margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;alig
 <div class="sub">The Whiskey Flight</div>
 <div class="conn"><span class="cdot coff" id="cd"></span><span class="hint" id="cs">Connecting...</span></div>
 </div>
-<div class="card" id="v"></div>
+<div class="card" id="pa" style="display:none">
+<div class="st">Enter PIN</div>
+<div class="hint" style="margin-bottom:12px">Shown on the device screen</div>
+<input type="text" id="pp" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="4-digit PIN" style="text-align:center;font-size:28px;letter-spacing:8px">
+<div id="pe" class="ferr" style="display:none"></div>
+<button class="btn bp" onclick="doAuth()">CONNECT</button>
+</div>
+<div class="card" id="v" style="display:none"></div>
 <div class="card" id="wc" style="display:none"></div>
 <div class="card" id="fc" style="display:none"></div>
 <script>
@@ -219,18 +291,34 @@ var S=null,ws=null,lk=false,F=null,fOpen=false;
 var H=null,HY=null,HR=null,HJ=false,HN='';
 var hg0=-1,hg1=-1,hClaim=0;
 var wOpen=false,wNets=null,wSel='',wSta=false,wMsg='';
+var authed=false;
+function doAuth(){
+var p=$('pp');if(!p)return;
+var v=p.value.trim();if(v.length!==4){$('pe').textContent='Enter 4 digits';$('pe').style.display='';return;}
+if(ws&&ws.readyState===1)ws.send(JSON.stringify({a:'auth',v:v}));
+}
 function cn(){
 ws=new WebSocket('ws://'+location.hostname+':81/');
 ws.onopen=function(){
 $('cd').className='cdot con';$('cs').textContent='Connected';
-tx({a:'fav_list'});
+if(!authed){$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
 };
 ws.onclose=function(){
 $('cd').className='cdot coff';$('cs').textContent='Reconnecting...';
-S=null;F=null;H=null;HY=null;HR=null;HJ=false;lk=false;hg0=-1;hg1=-1;hClaim=0;rn();rfav();setTimeout(cn,2000);
+S=null;F=null;H=null;HY=null;HR=null;HJ=false;lk=false;hg0=-1;hg1=-1;hClaim=0;authed=false;
+$('pa').style.display='none';$('v').style.display='none';
+rn();rfav();setTimeout(cn,2000);
 };
 ws.onmessage=function(e){
 try{var d=JSON.parse(e.data);
+if(d.t==='auth_required'){
+if(!authed){$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
+return;}
+if(d.t==='auth'){
+if(d.ok){authed=true;$('pa').style.display='none';$('v').style.display='';
+lk=false;tx({a:'fav_list'});}
+else{$('pe').textContent='Wrong PIN';$('pe').style.display='';$('pp').value='';$('pp').focus();}
+return;}
 if(d.t==='favs'){F=d;lk=false;rfav();return;}
 if(d.t==='h2h'){H=d;lk=false;rh();return;}
 if(d.t==='h2h_you'){HY=d;lk=false;rh();return;}
@@ -616,6 +704,7 @@ function hsubp(v){
 tx({a:'h2h_guess_premium',v:v});
 }
 document.addEventListener('keydown',function(e){
+if(e.key==='Enter'&&!authed&&document.activeElement===$('pp'))doAuth();
 if(e.key==='Enter'&&S&&S.s==='NM')sn();
 if(e.key==='Enter'&&fOpen&&document.activeElement===$('fi'))favAdd();
 if(e.key==='Enter'&&!HJ&&$('hn')&&document.activeElement===$('hn'))hjoin();
@@ -638,8 +727,8 @@ static int buildStateJSON(char* buf, int bufLen) {
     bool active = gameIsActive();
 
     if (!active) {
-        return snprintf(buf, bufLen, "{\"a\":false,\"sta\":%s}",
-                        staMode ? "true" : "false");
+        return snprintf(buf, bufLen, "{\"a\":false,\"sta\":%s,\"serial\":\"%s\"}",
+                        staMode ? "true" : "false", deviceGetSerial());
     }
 
     GameState gs = gameGetState();
@@ -1109,7 +1198,7 @@ static void handleWifiConnect(const char* ssid, const char* pass) {
         staMode = false;
         WiFi.disconnect(true);
         WiFi.mode(WIFI_AP);
-        WiFi.softAP(AP_SSID, AP_PASSWORD);
+        WiFi.softAP(AP_SSID, apPassword);
 
         IPAddress apIP = WiFi.softAPIP();
         dnsServer.start(DNS_PORT, "*", apIP);
@@ -1142,6 +1231,33 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
     *aEnd = '\0';
     String action(aPtr);
     *aEnd = '"';
+
+    // --- PIN authentication gate ---
+    if (action == "auth") {
+        char* vPtr = strstr(msg, "\"v\":\"");
+        if (!vPtr) { wsServer.disconnect(clientNum); return; }
+        vPtr += 5;
+        char* vEnd = strchr(vPtr, '"');
+        if (!vEnd) { wsServer.disconnect(clientNum); return; }
+        *vEnd = '\0';
+        if (strcmp(vPtr, wsPIN) == 0) {
+            if (clientNum < 5) clientAuthed[clientNum] = true;
+            wsServer.sendTXT(clientNum, "{\"t\":\"auth\",\"ok\":true}");
+            sendStateToClient(clientNum);
+            if (h2hIsActive()) buildAndBroadcastH2H();
+            Serial.printf("[WiFi] Client %u authenticated\n", clientNum);
+        } else {
+            wsServer.sendTXT(clientNum, "{\"t\":\"auth\",\"ok\":false}");
+            wsServer.disconnect(clientNum);
+            Serial.printf("[WiFi] Client %u bad PIN, disconnected\n", clientNum);
+        }
+        return;
+    }
+
+    if (clientNum >= 5 || !clientAuthed[clientNum]) {
+        wsServer.sendTXT(clientNum, "{\"t\":\"auth_required\"}");
+        return;
+    }
 
     // --- Button actions ---
     if (action == "right") {
@@ -1259,7 +1375,18 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
             }
         }
 
-        handleWifiConnect(ssidBuf, passBuf);
+        strncpy(pendingSSID, ssidBuf, sizeof(pendingSSID) - 1);
+        pendingSSID[sizeof(pendingSSID) - 1] = '\0';
+        strncpy(pendingPass, passBuf, sizeof(pendingPass) - 1);
+        pendingPass[sizeof(pendingPass) - 1] = '\0';
+        pendingWifiConnect = true;
+        pendingWifiMs = millis();
+
+        char confirmJson[96];
+        snprintf(confirmJson, sizeof(confirmJson),
+            "{\"t\":\"wifi_confirm\",\"s\":\"%s\"}", pendingSSID);
+        wsServer.broadcastTXT(confirmJson);
+        Serial.printf("[WiFi] Pending confirmation to join: %s\n", pendingSSID);
         return;
     }
 
@@ -1341,13 +1468,14 @@ static void webSocketEvent(uint8_t num, WStype_t type,
                            uint8_t* payload, size_t length) {
     switch (type) {
         case WStype_CONNECTED:
-            Serial.printf("[WiFi] WS client %u connected\n", num);
-            sendStateToClient(num);
-            if (h2hIsActive()) buildAndBroadcastH2H();
+            Serial.printf("[WiFi] WS client %u connected (awaiting PIN)\n", num);
+            if (num < 5) clientAuthed[num] = false;
+            wsServer.sendTXT(num, "{\"t\":\"auth_required\"}");
             break;
 
         case WStype_DISCONNECTED:
             Serial.printf("[WiFi] WS client %u disconnected\n", num);
+            if (num < 5) clientAuthed[num] = false;
             h2hPhoneDisconnect(num);
             break;
 
@@ -1399,6 +1527,10 @@ static void handleNotFound() {
 void wifiPortalInit() {
     if (portalRunning) return;
 
+    generateAPPassword();
+    generatePIN();
+    memset(clientAuthed, 0, sizeof(clientAuthed));
+
     loadCredentials();
 
     // --- Try STA mode if credentials are saved ---
@@ -1429,7 +1561,7 @@ void wifiPortalInit() {
     if (!staMode) {
         Serial.println("[WiFi] Starting soft AP...");
         WiFi.mode(WIFI_AP);
-        WiFi.softAP(AP_SSID, AP_PASSWORD);
+        WiFi.softAP(AP_SSID, apPassword);
 
         IPAddress apIP = WiFi.softAPIP();
         Serial.printf("[WiFi] AP SSID: %s\n", AP_SSID);
@@ -1475,6 +1607,24 @@ void wifiPortalUpdate() {
     }
     webServer.handleClient();
     wsServer.loop();
+
+    // --- Pending wifi_connect: push confirmation screen ---
+    static bool confirmScreenPushed = false;
+    if (pendingWifiConnect && !confirmScreenPushed) {
+        confirmScreenPushed = true;
+        extern const Screen screenWifiConfirm;
+        uiPushScreenT(&screenWifiConfirm, TRANS_WIPE_LEFT);
+    }
+    if (!pendingWifiConnect) {
+        confirmScreenPushed = false;
+    }
+
+    // --- Pending wifi_connect timeout ---
+    if (pendingWifiConnect && millis() - pendingWifiMs >= WIFI_CONFIRM_TIMEOUT) {
+        Serial.println("[WiFi] wifi_connect confirmation timed out");
+        wifiConfirmConnect(false);
+        uiPopScreenT(TRANS_WIPE_LEFT);
+    }
 
     // --- State broadcast (poll for changes every 150ms) ---
     unsigned long now = millis();
@@ -1571,7 +1721,7 @@ void wifiReconnect() {
         staMode = false;
         WiFi.disconnect(true);
         WiFi.mode(WIFI_AP);
-        WiFi.softAP(AP_SSID, AP_PASSWORD);
+        WiFi.softAP(AP_SSID, apPassword);
         IPAddress apIP = WiFi.softAPIP();
         dnsServer.start(DNS_PORT, "*", apIP);
     }

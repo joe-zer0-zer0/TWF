@@ -44,3 +44,14 @@ bool wifiHasCredentials();
 void wifiSaveCredentials(const char* ssid, const char* pass);
 void wifiForgetCredentials();
 void wifiReconnect();
+
+// --- Security ---
+
+const char* wifiGetAPPassword();
+const char* wifiGetPIN();
+
+// --- Pending wifi_connect confirmation ---
+
+bool wifiGetPendingConnect();
+const char* wifiGetPendingSSID();
+void wifiConfirmConnect(bool confirm);

@@ -190,6 +190,7 @@ static void doInstall() {
     otaDraw(true);
 
     bool ok = otaPerformUpdate(otaInfo.url, otaInfo.size,
+                               otaInfo.sha256,
                                otaProgressCb,
                                otaErrMsg, sizeof(otaErrMsg));
     if (ok) {

@@ -7,6 +7,7 @@
 #include "transitions.h"
 #include "wifi_portal.h"
 #include "favorites.h"
+#include "device_id.h"
 
 // ============================================================
 // Blind Flight — Settings Screen (Session 17)
@@ -20,6 +21,7 @@ enum SettingsItem {
     SET_SOUND = 0,
     SET_BRIGHT,
     SET_WIFI,
+    SET_WIFIQR,
     SET_WIFISETUP,
     SET_SPEED,
     SET_POURSIDE,
@@ -32,7 +34,7 @@ enum SettingsItem {
     SET_MOTORTEST,
     SET_ABOUT,
     SET_UPDATE,
-    SET_COUNT       // 15
+    SET_COUNT       // 16
 };
 
 // How many items fit in the content area
@@ -97,6 +99,7 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
         case SET_SOUND:  label = "Sound";      break;
         case SET_BRIGHT: label = "Brightness"; break;
         case SET_WIFI:      label = "Wi-Fi";      break;
+        case SET_WIFIQR:    label = "Join Wi-Fi"; break;
         case SET_WIFISETUP: label = "Wi-Fi Setup"; break;
         case SET_SPEED:    label = "Spin Speed"; break;
         case SET_POURSIDE:  label = "Pour Side";  break;
@@ -193,6 +196,15 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
                 snprintf(valBuf, sizeof(valBuf), "0 >");
             } else {
                 snprintf(valBuf, sizeof(valBuf), "%+d >", off);
+            }
+            break;
+        }
+        case SET_WIFIQR: {
+            if (wifiPortalIsRunning() && !wifiIsSTAMode()) {
+                snprintf(valBuf, sizeof(valBuf), "QR >");
+            } else {
+                tft->setTextColor(COL_DIM, bgCol);
+                snprintf(valBuf, sizeof(valBuf), wifiIsSTAMode() ? "STA" : "Off");
             }
             break;
         }
@@ -551,6 +563,14 @@ static void settingsInput(InputEvent evt) {
                 audioPlayTone(TONE_SELECT);
                 extern const Screen screenFavorites;
                 uiPushScreenT(&screenFavorites, TRANS_WIPE_LEFT);
+            } else if (setSelected == SET_WIFIQR) {
+                if (wifiPortalIsRunning() && !wifiIsSTAMode()) {
+                    audioPlayTone(TONE_SELECT);
+                    extern const Screen screenWifiQR;
+                    uiPushScreenT(&screenWifiQR, TRANS_WIPE_LEFT);
+                } else {
+                    audioPlayTone(TONE_ERROR);
+                }
             } else if (setSelected == SET_WIFISETUP) {
                 audioPlayTone(TONE_SELECT);
                 extern const Screen screenWifiSetup;
@@ -717,6 +737,17 @@ static void aboutDraw(bool fullRedraw) {
         tft->setTextDatum(MR_DATUM);
         tft->setTextColor(motorIsHomed() ? COL_SELECTED : COL_DIM, COL_BG);
         tft->drawString(motorIsHomed() ? "Homed" : "Not Homed", SCREEN_W - 16, y);
+
+        // Device serial number
+        y += lineH;
+        tft->setTextSize(FONT_SMALL);
+        tft->setTextDatum(ML_DATUM);
+        tft->setTextColor(COL_DIM, COL_BG);
+        tft->drawString("Serial", labelX, y);
+        tft->setTextDatum(MR_DATUM);
+        tft->setTextColor(COL_ACCENT, COL_BG);
+        tft->drawString(deviceGetSerial(), SCREEN_W - 16, y);
+        tft->setTextSize(FONT_BODY);
 
         uiDrawSoftButtons("BACK", "");
 

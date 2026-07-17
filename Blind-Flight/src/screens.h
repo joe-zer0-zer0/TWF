@@ -47,6 +47,12 @@ extern const Screen screenWifiSetup;
 // OTA firmware update screen
 extern const Screen screenOtaUpdate;
 
+// Join Wi-Fi screen (QR code + password + PIN)
+extern const Screen screenWifiQR;
+
+// Wi-Fi connect confirmation screen
+extern const Screen screenWifiConfirm;
+
 // Blocking homing helper — draws its own UI, returns to caller.
 // Call this from setup() or from a screen's input handler.
 // Returns true if homing succeeded.
