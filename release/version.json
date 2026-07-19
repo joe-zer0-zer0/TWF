@@ -1,7 +1,7 @@
 {
-  "version": "1.2.0",
+  "version": "1.3.1",
   "url": "https://github.com/joe-zer0-zer0/TWF/releases/latest/download/firmware.bin",
-  "notes": "Guess + Ranked mode, submenu indicators",
-  "size": 1280768,
-  "sha256": ""
+  "notes": "Security hardening + STA PIN display fix",
+  "size": 1290592,
+  "sha256": "951a5b357b41465d0c528ad7886c208c81e4f375a5c4b407bee798427864826e"
 }
