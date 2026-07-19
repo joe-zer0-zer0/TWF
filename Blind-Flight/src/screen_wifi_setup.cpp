@@ -104,6 +104,15 @@ static void wifiSetupDraw(bool fullRedraw) {
         tft->setTextColor(COL_ACCENT, COL_BG);
         tft->drawString(wifiGetIP(), valX, y);
 
+        // PIN (needed for phone WebSocket auth)
+        y += 26;
+        tft->setTextDatum(ML_DATUM);
+        tft->setTextColor(COL_TEXT, COL_BG);
+        tft->drawString("PIN", labelX, y);
+        tft->setTextDatum(MR_DATUM);
+        tft->setTextColor(COL_ACCENT, COL_BG);
+        tft->drawString(wifiGetPIN(), valX, y);
+
         // Signal strength (STA only)
         if (wifiIsSTAMode() && wifiIsConnected()) {
             y += 26;
