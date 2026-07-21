@@ -1,0 +1,56 @@
+name: Build & Release Firmware
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: pio run -e esp32
+        working-directory: Blind-Flight
+
+      - name: Prepare release assets
+        run: |
+          BIN="Blind-Flight/.pio/build/esp32/firmware.bin"
+          cp "$BIN" release/firmware.bin
+
+          SIZE=$(stat --format=%s release/firmware.bin)
+          SHA=$(sha256sum release/firmware.bin | cut -d' ' -f1)
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          printf '{\n  "version": "%s",\n  "url": "https://github.com/%s/releases/latest/download/firmware.bin",\n  "notes": "Release %s",\n  "size": %s,\n  "sha256": "%s"\n}\n' \
+            "$VERSION" "${{ github.repository }}" "$VERSION" "$SIZE" "$SHA" \
+            > release/version.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/firmware.bin
+          generate_release_notes: true
+
+      - name: Commit updated version.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin master
+          git checkout master
+          git add release/version.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update version.json for v${GITHUB_REF_NAME#v}"
+          git push origin master
