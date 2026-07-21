@@ -115,3 +115,12 @@ int  h2hGetPremiumGlassNum();  // which glass (1-based) has the premium bottle
 // WebSocket disconnect — mark player as disconnected
 void h2hPhoneDisconnect(uint8_t clientNum);
 
+// ============================================================
+// Phone-based H2H creation (Session 25)
+// ============================================================
+
+void h2hStartFromPhone(uint8_t clientNum, H2HSubMode mode);
+void h2hPhoneSetGlassCount(int count);
+void h2hPhoneAddBottle(const char* name);
+void h2hPhoneStartGame(uint8_t clientNum);
+

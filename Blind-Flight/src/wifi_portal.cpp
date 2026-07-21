@@ -5,8 +5,10 @@
 #include "input.h"
 #include "favorites.h"
 #include "device_id.h"
+#ifndef HEADLESS_BUILD
 #include "screens.h"
 #include "transitions.h"
+#endif
 
 #include <WiFi.h>
 #include <DNSServer.h>
@@ -189,10 +191,15 @@ static void generatePIN() {
 }
 
 // ============================================================
-// Embedded HTML page — interactive phone UI (PROGMEM)
+// Embedded HTML page — gzipped phone UI (auto-generated)
 // ============================================================
 
-static const char PAGE_HTML[] PROGMEM = R"rawliteral(
+#include "phone_ui_gz.h"
+
+// Legacy raw HTML kept for reference — actual serving uses gzipped version above.
+// To edit the phone UI, modify web/phone_ui.html and rebuild.
+#if 0
+static const char PAGE_HTML_UNUSED[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -715,6 +722,7 @@ cn();
 </body>
 </html>
 )rawliteral";
+#endif
 
 // ============================================================
 // JSON state builder
@@ -881,6 +889,69 @@ static int buildStateJSON(char* buf, int bufLen) {
         JSON_PUT('}');
     }
 
+    // --- Ranking state ---
+    if (gs == GAME_RANKING) {
+        int ri2 = gameGetRankIndex();
+        int rpc = gameGetRankPoolCount();
+        pos += snprintf(buf + pos, JSON_REM, ",\"ki\":%d,\"kp\":[", ri2);
+        for (int i = 0; i < rpc; i++) {
+            if (i > 0) JSON_PUT(',');
+            pos += snprintf(buf + pos, JSON_REM, "%d", gameGetRankPoolGlass(i));
+        }
+        JSON_PUT(']');
+    }
+
+    // --- Bottle select state (challenge modes) ---
+    if (gs == GAME_BOTTLE_SELECT) {
+        int bc = gameGetChallengeBottleCount();
+        int bt = gameGetChallengeBottleTarget();
+        pos += snprintf(buf + pos, JSON_REM, ",\"bc\":%d,\"bt\":%d,\"bn\":[", bc, bt);
+        for (int i = 0; i < bc; i++) {
+            if (i > 0) JSON_PUT(',');
+            JSON_PUT('"');
+            const char* bn = gameGetChallengeBottleName(i);
+            for (int j = 0; bn[j]; j++) {
+                char c = bn[j];
+                if (c == '"' || c == '\\') JSON_PUT('\\');
+                JSON_PUT(c);
+            }
+            JSON_PUT('"');
+        }
+        JSON_PUT(']');
+    }
+
+    // --- Challenge guess state ---
+    if (gs == GAME_CHALLENGE_GUESS) {
+        int cn2 = gameGetChallengeNeeded();
+        int cc = gameGetChallengeGuessCount();
+        pos += snprintf(buf + pos, JSON_REM, ",\"cn2\":%d,\"cc\":%d,\"cs\":[", cn2, cc);
+        for (int i = 0; i < cc; i++) {
+            if (i > 0) JSON_PUT(',');
+            pos += snprintf(buf + pos, JSON_REM, "%d", gameGetChallengeGuess(i));
+        }
+        JSON_PUT(']');
+    }
+
+    // --- Challenge result state ---
+    if (gs == GAME_CHALLENGE_RESULT) {
+        pos += snprintf(buf + pos, JSON_REM, ",\"cok\":%s",
+                        gameGetChallengeCorrect() ? "true" : "false");
+    }
+
+    // --- Challenge pour: include bottle name ---
+    if (gs == GAME_POURING && (gm == GAME_MODE_DUPLICATE || gm == GAME_MODE_DECOY)) {
+        const char* cpb = gameGetChallengePourBottle();
+        if (cpb && cpb[0]) {
+            pos += snprintf(buf + pos, JSON_REM, ",\"cpb\":\"");
+            for (int i = 0; cpb[i]; i++) {
+                char c = cpb[i];
+                if (c == '"' || c == '\\') JSON_PUT('\\');
+                JSON_PUT(c);
+            }
+            JSON_PUT('"');
+        }
+    }
+
     JSON_PUT('}');
     if (pos >= bufLen) pos = bufLen - 1;
     buf[pos] = '\0';
@@ -895,7 +966,7 @@ static int buildStateJSON(char* buf, int bufLen) {
 // ============================================================
 
 static void broadcastState() {
-    char json[1024];
+    char json[1280];
     buildStateJSON(json, sizeof(json));
     wsServer.broadcastTXT(json);
 }
@@ -1307,10 +1378,57 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
         if (!vPtr) return;
         vPtr += 5;
         GameMode mode = GAME_MODE_BASIC;
-        if (*vPtr == 'N') mode = GAME_MODE_NAMED;
-        else if (*vPtr == 'G') mode = GAME_MODE_GUESS;
+        switch (*vPtr) {
+            case 'N': mode = GAME_MODE_NAMED;      break;
+            case 'G': mode = GAME_MODE_GUESS;       break;
+            case 'R': mode = GAME_MODE_RANK;        break;
+            case 'Q': mode = GAME_MODE_GUESS_RANK;  break;
+            case 'D': mode = GAME_MODE_DUPLICATE;   break;
+            case 'Y': mode = GAME_MODE_DECOY;       break;
+        }
         Serial.printf("[WiFi] Phone start: mode %d\n", (int)mode);
         gameStartFromPhone(mode);
+        return;
+    }
+
+    // --- Rank selection ---
+    if (action == "rank") {
+        char* vPtr = strstr(msg, "\"v\":");
+        if (!vPtr) return;
+        int idx = atoi(vPtr + 4);
+        Serial.printf("[WiFi] Phone rank: %d\n", idx);
+        gamePhoneRankSelect(idx);
+        return;
+    }
+
+    // --- Bottle submission (challenge modes) ---
+    if (action == "bottle") {
+        char* vPtr = strstr(msg, "\"v\":\"");
+        if (!vPtr) return;
+        vPtr += 5;
+        char* vEnd = strrchr(vPtr, '"');
+        if (!vEnd || vEnd == vPtr) return;
+        *vEnd = '\0';
+        jsonUnescapeInPlace(vPtr);
+        Serial.printf("[WiFi] Phone bottle: %s\n", vPtr);
+        gamePhoneBottleSubmit(vPtr);
+        return;
+    }
+
+    // --- Challenge guess: toggle glass selection ---
+    if (action == "csel") {
+        char* vPtr = strstr(msg, "\"v\":");
+        if (!vPtr) return;
+        int glassNum = atoi(vPtr + 4);
+        Serial.printf("[WiFi] Phone challenge select: %d\n", glassNum);
+        gamePhoneChallengeSelect(glassNum);
+        return;
+    }
+
+    // --- Challenge guess: confirm ---
+    if (action == "cconfirm") {
+        Serial.println("[WiFi] Phone challenge confirm");
+        gamePhoneChallengeConfirm();
         return;
     }
 
@@ -1458,6 +1576,48 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
         h2hPhoneGuessPremium(clientNum, guess);
         return;
     }
+
+    // --- H2H: start game from phone (host) ---
+    if (action == "h2h_create") {
+        char* vPtr = strstr(msg, "\"v\":");
+        if (!vPtr) return;
+        int subMode = atoi(vPtr + 4);
+        Serial.printf("[WiFi] H2H create: submode %d from client %u\n",
+                      subMode, clientNum);
+        h2hStartFromPhone(clientNum, (H2HSubMode)subMode);
+        return;
+    }
+
+    // --- H2H: set glass count (host) ---
+    if (action == "h2h_count") {
+        char* vPtr = strstr(msg, "\"v\":");
+        if (!vPtr) return;
+        int count = atoi(vPtr + 4);
+        Serial.printf("[WiFi] H2H count: %d\n", count);
+        h2hPhoneSetGlassCount(count);
+        return;
+    }
+
+    // --- H2H: add bottle (host) ---
+    if (action == "h2h_bottle") {
+        char* vPtr = strstr(msg, "\"v\":\"");
+        if (!vPtr) return;
+        vPtr += 5;
+        char* vEnd = strrchr(vPtr, '"');
+        if (!vEnd || vEnd == vPtr) return;
+        *vEnd = '\0';
+        jsonUnescapeInPlace(vPtr);
+        Serial.printf("[WiFi] H2H bottle: %s\n", vPtr);
+        h2hPhoneAddBottle(vPtr);
+        return;
+    }
+
+    // --- H2H: start game from lobby (host) ---
+    if (action == "h2h_go") {
+        Serial.printf("[WiFi] H2H go from client %u\n", clientNum);
+        h2hPhoneStartGame(clientNum);
+        return;
+    }
 }
 
 // ============================================================
@@ -1493,7 +1653,8 @@ static void webSocketEvent(uint8_t num, WStype_t type,
 // ============================================================
 
 static void handleRoot() {
-    webServer.send(200, "text/html", PAGE_HTML);
+    webServer.sendHeader("Content-Encoding", "gzip");
+    webServer.send_P(200, "text/html", (const char*)PAGE_HTML_GZ, PAGE_HTML_GZ_LEN);
 }
 
 static void handleGenerate204() {
@@ -1608,6 +1769,7 @@ void wifiPortalUpdate() {
     webServer.handleClient();
     wsServer.loop();
 
+#ifndef HEADLESS_BUILD
     // --- Pending wifi_connect: push confirmation screen ---
     static bool confirmScreenPushed = false;
     if (pendingWifiConnect && !confirmScreenPushed) {
@@ -1625,6 +1787,15 @@ void wifiPortalUpdate() {
         wifiConfirmConnect(false);
         uiPopScreenT(TRANS_WIPE_LEFT);
     }
+#else
+    // Headless: auto-confirm wifi_connect (no screen to confirm on)
+    if (pendingWifiConnect) {
+        if (millis() - pendingWifiMs >= WIFI_CONFIRM_TIMEOUT) {
+            Serial.println("[WiFi] wifi_connect timed out");
+            wifiConfirmConnect(false);
+        }
+    }
+#endif
 
     // --- State broadcast (poll for changes every 150ms) ---
     unsigned long now = millis();

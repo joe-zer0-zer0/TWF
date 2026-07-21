@@ -152,25 +152,41 @@ const char* gameGetGuessPoolName(int poolIdx);
 int       gameGetGuessCorrect();                 // count of correct guesses
 bool      gameGetGuessCorrectAt(int revealIdx);  // is guess correct at this reveal position?
 
-// ============================================================
-// Phone action handlers (Session 16)
-// ============================================================
-// Called from the Wi-Fi portal WebSocket handler. These set
-// deferred flags that gameDraw() processes on the next cycle,
-// ensuring all game state changes happen in the main loop
-// context alongside normal game operations.
+// Ranking info (valid when state == GAME_RANKING)
+int       gameGetRankIndex();                    // current rank slot (0 = 1st place)
+int       gameGetRankPoolCount();                // available glasses to pick from
+int       gameGetRankPoolGlass(int poolIdx);     // glass# at pool index
 
-// Submit a whiskey name from the phone keyboard.
-// Only effective when state == GAME_NAMING.
+// Challenge info (valid for DUPLICATE/DECOY modes)
+int       gameGetChallengeBottleCount();         // bottles selected so far
+int       gameGetChallengeBottleTarget();        // bottles needed (3 or 2)
+const char* gameGetChallengeBottleName(int idx); // bottle name at index
+int       gameGetChallengeGuessCount();          // selections made (0-2)
+int       gameGetChallengeGuess(int idx);        // glass# at guess index (1-based)
+int       gameGetChallengeNeeded();              // selections needed (2 or 1)
+bool      gameGetChallengeCorrect();             // result of challenge guess
+int       gameGetCurrentGlass();                 // cursor position (1-based)
+const char* gameGetChallengePourBottle();        // bottle name for current pour
+
+// ============================================================
+// Phone action handlers (Session 16, expanded Session 25)
+// ============================================================
+
 void gamePhoneSubmitName(const char* name);
-
-// Select a guess from the pool by pool index.
-// Only effective when state == GAME_GUESSING.
 void gamePhoneGuessSelect(int poolIndex);
-
-// Start a new flight from the phone.
-// Only effective when no game is active.
 void gameStartFromPhone(GameMode mode);
+
+// Ranking: select a glass by pool index for current rank
+void gamePhoneRankSelect(int poolIndex);
+
+// Challenge: submit a bottle name during BOTTLE_SELECT
+void gamePhoneBottleSubmit(const char* name);
+
+// Challenge: toggle glass selection during CHALLENGE_GUESS
+void gamePhoneChallengeSelect(int glassNum);
+
+// Challenge: confirm guess during CHALLENGE_GUESS
+void gamePhoneChallengeConfirm();
 
 // Resume a saved session (called from persist module on boot)
 void gameResumeSession(GameMode mode, GameState resumeState,
