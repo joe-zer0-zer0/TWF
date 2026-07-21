@@ -1,6 +1,7 @@
 #include "input.h"
 #include "config.h"
 
+#ifndef HEADLESS_BUILD
 // ============================================================
 // Encoder ISR state (volatile — modified in interrupt)
 // ============================================================
@@ -21,6 +22,7 @@ void IRAM_ATTR encoderISR() {
         lastCLK = clk;
     }
 }
+#endif // !HEADLESS_BUILD
 
 // ============================================================
 // Event queue — small ring buffer for pending input events
@@ -38,6 +40,7 @@ static void enqueueEvent(InputEvent evt) {
     }
 }
 
+#ifndef HEADLESS_BUILD
 // ============================================================
 // Button debounce and long-press state
 // ============================================================
@@ -93,12 +96,14 @@ static void pollEncSw(int pin, ButtonState &bs) {
 // Snapshot of encoder position for delta tracking
 // ============================================================
 static int lastEncoderSnapshot = 0;
+#endif // !HEADLESS_BUILD
 
 // ============================================================
 // API implementation
 // ============================================================
 
 void inputInit() {
+#ifndef HEADLESS_BUILD
     // Encoder
     pinMode(PIN_ENC_CLK, INPUT_PULLUP);
     pinMode(PIN_ENC_DT, INPUT_PULLUP);
@@ -114,9 +119,11 @@ void inputInit() {
     noInterrupts();
     lastEncoderSnapshot = encoderPos;
     interrupts();
+#endif
 }
 
 void inputUpdate() {
+#ifndef HEADLESS_BUILD
     // --- Encoder rotation ---
     int raw;
     noInterrupts();
@@ -139,6 +146,7 @@ void inputUpdate() {
     pollEncSw(PIN_ENC_SW, btnEncSw);
     pollButton(PIN_BTN_LEFT, btnLeft, INPUT_BTN_LEFT, INPUT_BTN_LEFT_LONG);
     pollButton(PIN_BTN_RIGHT, btnRight, INPUT_BTN_RIGHT, INPUT_BTN_RIGHT_LONG);
+#endif
 }
 
 InputEvent inputGetEvent() {
@@ -155,4 +163,3 @@ InputEvent inputGetEvent() {
 void inputInjectEvent(InputEvent evt) {
     enqueueEvent(evt);
 }
-

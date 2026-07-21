@@ -189,6 +189,14 @@ static void doInstall() {
     uiRequestRedraw();
     otaDraw(true);
 
+    // Detach buzzer from LEDC before flash writes — the peripheral can
+    // glitch during OTA, pulling the pin LOW (which is ON for the
+    // inverted MH-FMD buzzer). Hold HIGH = transistor off = silent.
+    audioStopTone();
+    ledcDetachPin(PIN_BUZZER);
+    pinMode(PIN_BUZZER, OUTPUT);
+    digitalWrite(PIN_BUZZER, HIGH);
+
     bool ok = otaPerformUpdate(otaInfo.url, otaInfo.size,
                                otaInfo.sha256,
                                otaProgressCb,

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Blind Flight</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+background:#111;color:#eee;min-height:100vh;display:flex;flex-direction:column;
+align-items:center;padding:16px}
+.hdr{text-align:center;margin-bottom:12px}
+.logo{font-size:22px;font-weight:700;color:#D4A547;letter-spacing:2px}
+.sub{font-size:12px;color:#888}
+.conn{margin-top:6px;font-size:13px}
+.cdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.con{background:#4CAF50}.coff{background:#F44336}
+.card{background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:24px;
+max-width:380px;width:100%;margin-bottom:12px}
+.st{text-align:center;font-size:18px;font-weight:600;margin-bottom:12px;color:#D4A547}
+.big{text-align:center;font-size:56px;font-weight:700;color:#D4A547;margin:4px 0}
+.nm{text-align:center;font-size:17px;color:#D4A547;margin:6px 0}
+.msg{text-align:center;font-size:15px;color:#aaa;margin:10px 0}
+.hint{text-align:center;font-size:13px;color:#666;margin-top:6px}
+input[type=text],input[type=password]{width:100%;padding:14px;background:#222;border:2px solid #444;
+border-radius:10px;color:#eee;font-size:18px;margin-bottom:10px;outline:none}
+input[type=text]:focus,input[type=password]:focus{border-color:#D4A547}
+.btn{width:100%;padding:14px;border:none;border-radius:10px;font-size:16px;
+font-weight:600;cursor:pointer;margin-bottom:8px;transition:transform .1s}
+.btn:active{transform:scale(.97)}
+.bp{background:#D4A547;color:#111}
+.bs{background:#333;color:#ccc}
+.bd{background:#444;color:#F44336}
+.btns{display:flex;gap:8px}.btns .btn{flex:1}
+.glasses{display:flex;justify-content:center;gap:8px;margin:12px 0}
+.gb{width:48px;height:48px;border-radius:8px;display:flex;align-items:center;
+justify-content:center;font-weight:700;font-size:18px;flex-direction:column}
+.gu{background:#D4A547;color:#111}.ge{background:#333;color:#888}
+.gs2{background:#4CAF50;color:#fff;border:2px solid #4CAF50}
+.pi{padding:14px;background:#222;border:1px solid #444;border-radius:10px;
+margin-bottom:8px;cursor:pointer;font-size:16px;text-align:center}
+.pi:active{background:#D4A547;color:#111}
+.dots{display:flex;justify-content:center;gap:10px;margin:12px 0}
+.dt{width:12px;height:12px;border-radius:50%}
+.don{background:#D4A547}.dof{background:#444}
+.rr{display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #222}
+.rn{font-weight:700;color:#D4A547;min-width:28px}
+.score{text-align:center;font-size:48px;font-weight:700;margin:8px 0}
+.chk{font-size:12px}.cok{color:#4CAF50}.cnk{color:#F44336}
+.fhdr{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:4px 0}
+.fhdr span:last-child{color:#888;font-size:14px}
+.fi{display:flex;justify-content:space-between;align-items:center;padding:10px;
+background:#222;border:1px solid #333;border-radius:8px;margin-bottom:6px}
+.fi span{color:#eee;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.fx{background:none;border:none;color:#F44336;font-size:20px;cursor:pointer;padding:0 0 0 12px;
+font-weight:700;line-height:1}
+.fadd{display:flex;gap:8px;margin-bottom:8px}
+.fadd input{flex:1;margin:0}
+.fadd button{flex-shrink:0;width:60px;margin:0;padding:14px 0}
+.fcnt{text-align:center;font-size:13px;color:#666;margin-top:4px}
+.ferr{text-align:center;font-size:13px;color:#F44336;margin:4px 0}
+.plr{padding:10px;background:#222;border:1px solid #333;border-radius:8px;margin-bottom:6px;
+display:flex;align-items:center;gap:8px}
+.plr .pdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.pcon{background:#4CAF50}.pdis{background:#F44336}
+.gsel{display:flex;gap:8px;margin:8px 0}
+.gsel .gbtn{flex:1;padding:16px 8px;background:#222;border:2px solid #444;border-radius:10px;
+text-align:center;cursor:pointer;font-size:15px;color:#eee}
+.gsel .gbtn.active{border-color:#D4A547;background:#2a2210}
+.rok{color:#4CAF50;font-weight:700}.rnk{color:#F44336;font-weight:700}
+.wnet{padding:12px;background:#222;border:1px solid #444;border-radius:10px;
+margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.wnet:active{background:#2a2210;border-color:#D4A547}
+.wnet.sel{border-color:#D4A547;background:#2a2210}
+.wrssi{color:#888;font-size:13px}
+.wlock{color:#888;font-size:14px;margin-left:4px}
+.sep{border:none;border-top:1px solid #333;margin:12px 0}
+.slbl{font-size:13px;color:#888;text-align:center;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="hdr">
+<div class="logo">BLIND FLIGHT</div>
+<div class="sub">The Whiskey Flight</div>
+<div class="conn"><span class="cdot coff" id="cd"></span><span class="hint" id="cs">Connecting...</span></div>
+</div>
+<div class="card" id="pa" style="display:none">
+<div class="st">Enter PIN</div>
+<div class="hint" style="margin-bottom:12px">Shown on the device screen</div>
+<input type="text" id="pp" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="4-digit PIN" style="text-align:center;font-size:28px;letter-spacing:8px">
+<div id="pe" class="ferr" style="display:none"></div>
+<button class="btn bp" onclick="doAuth()">CONNECT</button>
+</div>
+<div class="card" id="v" style="display:none"></div>
+<div class="card" id="wc" style="display:none"></div>
+<div class="card" id="fc" style="display:none"></div>
+<script>
+var S=null,ws=null,lk=false,F=null,fOpen=false;
+var H=null,HY=null,HR=null,HJ=false,HN='';
+var hg0=-1,hg1=-1,hClaim=0;
+var wOpen=false,wNets=null,wSel='',wSta=false,wMsg='';
+var authed=false;
+var h2hSetup=null;
+function doAuth(){
+var p=$('pp');if(!p)return;
+var v=p.value.trim();if(v.length!==4){$('pe').textContent='Enter 4 digits';$('pe').style.display='';return;}
+if(ws&&ws.readyState===1)ws.send(JSON.stringify({a:'auth',v:v}));
+}
+function cn(){
+ws=new WebSocket('ws://'+location.hostname+':81/');
+ws.onopen=function(){
+$('cd').className='cdot con';$('cs').textContent='Connected';
+if(!authed){$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
+};
+ws.onclose=function(){
+$('cd').className='cdot coff';$('cs').textContent='Reconnecting...';
+S=null;F=null;H=null;HY=null;HR=null;HJ=false;lk=false;hg0=-1;hg1=-1;hClaim=0;authed=false;h2hSetup=null;
+$('pa').style.display='none';$('v').style.display='none';
+rn();rfav();setTimeout(cn,2000);
+};
+ws.onmessage=function(e){
+try{var d=JSON.parse(e.data);
+if(d.t==='auth_required'){
+if(!authed){$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
+return;}
+if(d.t==='auth'){
+if(d.ok){authed=true;$('pa').style.display='none';$('v').style.display='';
+lk=false;tx({a:'fav_list'});}
+else{$('pe').textContent='Wrong PIN';$('pe').style.display='';$('pp').value='';$('pp').focus();}
+return;}
+if(d.t==='favs'){F=d;lk=false;rfav();return;}
+if(d.t==='h2h'){H=d;lk=false;rh();return;}
+if(d.t==='h2h_you'){HY=d;lk=false;rh();return;}
+if(d.t==='h2h_result'){HR=d;lk=false;rh();return;}
+if(d.t==='h2h_err'){lk=false;return;}
+if(d.t==='wifi_nets'){wNets=d.nets;lk=false;rwifi();return;}
+if(d.t==='wifi_status'){lk=false;
+if(d.ok){wMsg='Connected! IP: '+d.ip;wSta=true;}
+else{wMsg='Connection failed';}
+rwifi();return;}
+S=d;lk=false;rn();showFavCard();showWifiCard();
+}catch(x){}
+};
+}
+function tx(o){
+if(lk)return;lk=true;
+if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));
+}
+function txf(o){
+if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));
+}
+function $(id){return document.getElementById(id)}
+function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+function rn(){
+var v=$('v');
+if(!S){v.innerHTML='<div class="msg">Connecting to device...</div>';return;}
+if(S.a&&S.sp){
+v.innerHTML='<div class="st">Spinning...</div>'+
+'<div class="msg">Selecting a glass</div>'+
+'<div class="hint">Please wait</div>';
+return;
+}
+if(!S.a){
+if(h2hSetup){rh2hSetup();return;}
+v.innerHTML='<div class="st">Ready</div>'+
+'<div class="msg">Start a flight</div>'+
+'<button class="btn bp" onclick="tx({a:\'start\',v:\'B\'})">Basic Flight</button>'+
+'<button class="btn bp" onclick="tx({a:\'start\',v:\'N\'})">Named Flight</button>'+
+'<button class="btn bp" onclick="tx({a:\'start\',v:\'G\'})">Best Guess</button>'+
+'<button class="btn bp" onclick="tx({a:\'start\',v:\'R\'})">Ranked Flight</button>'+
+'<button class="btn bp" onclick="tx({a:\'start\',v:\'Q\'})">Guess + Ranked</button>'+
+'<hr class="sep"><div class="slbl">Challenge Modes</div>'+
+'<button class="btn bp" onclick="tx({a:\'start\',v:\'D\'})">Twin Pour (Duplicate)</button>'+
+'<button class="btn bp" onclick="tx({a:\'start\',v:\'Y\'})">Find the Ringer (Decoy)</button>'+
+'<hr class="sep"><div class="slbl">Multiplayer</div>'+
+'<button class="btn bp" onclick="h2hStart()">Head-to-Head</button>'+
+'<div class="hint">Or start from the device</div>';
+return;
+}
+var s=S.s,m=S.m,h='';
+if(s==='NM'){
+h+='<div class="st">Pour '+(S.p+1)+'</div>';
+h+='<input type="text" id="ni" placeholder="Enter whiskey name" maxlength="21" autocomplete="off" autocapitalize="words">';
+h+='<button class="btn bp" onclick="sn()">Submit Name</button>';
+if(S.p>0)h+='<button class="btn bs" onclick="tx({a:\'left\'})">Skip — End Flight</button>';
+h+='<div class="hint">Type a name and tap Submit</div>';
+}else if(s==='BS'){
+var bc=S.bc||0,bt=S.bt||3;
+h+='<div class="st">'+(m==='D'?'Twin Pour':'Find the Ringer')+' — Bottles</div>';
+h+='<div class="msg">Bottle '+(bc+1)+' of '+bt+'</div>';
+if(S.bn&&S.bn.length>0){
+h+='<div class="hint" style="margin-bottom:8px">Added:</div>';
+for(var i=0;i<S.bn.length;i++)
+h+='<div class="fi"><span>'+esc(S.bn[i])+'</span></div>';
+}
+h+='<input type="text" id="bi" placeholder="Enter bottle name" maxlength="21" autocomplete="off" autocapitalize="words">';
+h+='<button class="btn bp" onclick="sb()">Add Bottle</button>';
+h+='<div class="hint">'+(m==='D'?'3 bottles needed — one will be poured twice':'2 bottles needed — one will be the ringer')+'</div>';
+}else if(s==='PO'){
+h+='<div class="st">Pour '+(S.p+1)+'</div>';
+h+='<div class="big">'+(S.p+1)+'</div>';
+if(S.cpb)h+='<div class="nm">'+esc(S.cpb)+'</div>';
+else if(S.cn)h+='<div class="nm">'+esc(S.cn)+'</div>';
+h+='<div class="msg">Ready To Pour</div>';
+h+='<button class="btn bp" onclick="tx({a:\'right\'})">Done — Poured</button>';
+h+='<button class="btn bs" onclick="tx({a:\'left\'})">Skip — End Flight</button>';
+}else if(s==='TA'){
+h+='<div class="st">Tasting Time</div>';
+h+='<div class="msg">'+S.p+' Glasses Poured</div>';
+h+=gl();
+h+='<div class="msg">Enjoy Your Flight</div>';
+if(m==='G')h+='<button class="btn bp" onclick="tx({a:\'right\'})">Start Guessing</button>';
+else if(m==='R')h+='<button class="btn bp" onclick="tx({a:\'right\'})">Start Ranking</button>';
+else if(m==='Q')h+='<button class="btn bp" onclick="tx({a:\'right\'})">Start Ranking</button>';
+else if(m==='D'||m==='Y')h+='<button class="btn bp" onclick="tx({a:\'right\'})">'+(m==='D'?'Find the Twins':'Find the Ringer')+'</button>';
+else h+='<button class="btn bp" onclick="tx({a:\'right\'})">Reveal</button>';
+}else if(s==='RK'){
+var ki=S.ki!==undefined?S.ki:0;
+var kp=S.kp||[];
+h+='<div class="st">Rank #'+(ki+1)+'</div>';
+h+='<div class="msg">'+(ki===0?'Which was your favorite?':'Rank #'+(ki+1)+' — next best?')+'</div>';
+for(var i=0;i<kp.length;i++)
+h+='<div class="pi" onclick="tx({a:\'rank\',v:'+i+'})">Glass '+kp[i]+'</div>';
+h+='<button class="btn bs" onclick="tx({a:\'left\'})">Back</button>';
+}else if(s==='GU'){
+h+='<div class="st">Glass '+S.gg+'</div>';
+h+='<div class="msg">Which whiskey is this?</div>';
+for(var i=0;i<S.gp.length;i++)
+h+='<div class="pi" onclick="tx({a:\'guess\',v:'+i+'})">'+esc(S.gp[i])+'</div>';
+h+='<button class="btn bs" onclick="tx({a:\'left\'})">Back</button>';
+}else if(s==='GS'){
+h+='<div class="st">Results</div>';
+h+='<div class="score">'+S.gc+' of '+S.rc+'</div>';
+h+='<div class="msg">Correct</div>';
+h+='<div class="btns"><button class="btn bs" onclick="tx({a:\'left\'})">Re-guess</button>';
+h+='<button class="btn bp" onclick="tx({a:\'right\'})">Next</button></div>';
+}else if(s==='GD'){
+h+='<div class="st">Your Guesses</div>';
+h+=gd();
+h+='<div class="msg">'+S.gc+' of '+S.rc+' Correct</div>';
+h+='<div class="btns"><button class="btn bs" onclick="tx({a:\'left\'})">Re-guess</button>';
+h+='<button class="btn bp" onclick="tx({a:\'right\'})">Reveal</button></div>';
+}else if(s==='CG'){
+var cn2=S.cn2||1,cc=S.cc||0,cs=S.cs||[];
+h+='<div class="st">'+(m==='D'?'Find the Twins':'Find the Ringer')+'</div>';
+h+='<div class="msg">Select '+(cn2===2?'the 2 matching glasses':'the odd one out')+'</div>';
+h+='<div class="glasses">';
+for(var i=1;i<=4;i++){
+var sel=false;
+for(var j=0;j<cs.length;j++){if(cs[j]===i)sel=true;}
+h+='<div class="gb '+(sel?'gs2':'gu')+'" style="cursor:pointer" onclick="csel('+i+')">'+i+'</div>';
+}
+h+='</div>';
+h+='<div class="hint">'+cc+' of '+cn2+' selected</div>';
+if(cc>=cn2)h+='<button class="btn bp" onclick="tx({a:\'cconfirm\'})">Confirm Guess</button>';
+else h+='<button class="btn bs" disabled>Select '+(cn2-cc)+' more</button>';
+}else if(s==='CR'){
+h+='<div class="st">'+(S.cok?'Correct!':'Wrong!')+'</div>';
+h+='<div class="big" style="color:'+(S.cok?'#4CAF50':'#F44336')+'">'+(S.cok?'✓':'✗')+'</div>';
+h+='<div class="msg">'+(S.cok?'Nice work!':'Better luck next time')+'</div>';
+h+='<button class="btn bp" onclick="tx({a:\'right\'})">Reveal</button>';
+}else if(s==='RE'){
+h+='<div class="st">Glass '+S.rg+'</div>';
+h+='<div class="nm" style="font-size:22px">'+esc(S.rn)+'</div>';
+h+='<div class="hint">Pour #'+(S.rp+1)+'</div>';
+h+=dt();
+var last=(S.ri>=S.rc-1);
+h+='<button class="btn bp" onclick="tx({a:\'right\'})">'+(last?'Finish':'Next')+'</button>';
+}else if(s==='DO'){
+h+='<div class="st" style="color:#4CAF50">Flight Complete</div>';
+h+=rs();
+h+='<div class="btns"><button class="btn bs" onclick="tx({a:\'left\'})">Exit</button>';
+h+='<button class="btn bp" onclick="tx({a:\'right\'})">New Flight</button></div>';
+}
+v.innerHTML=h;
+if(s==='NM'){var ni=$('ni');if(ni)ni.focus();}
+if(s==='BS'){var bi=$('bi');if(bi)bi.focus();}
+}
+function sn(){var ni=$('ni');if(ni&&ni.value.trim())tx({a:'name',v:ni.value.trim()});}
+function sb(){var bi=$('bi');if(bi&&bi.value.trim())tx({a:'bottle',v:bi.value.trim()});}
+function csel(g){txf({a:'csel',v:g});}
+function gl(){
+var h='<div class="glasses">';
+for(var i=0;i<4;i++)h+='<div class="gb '+(S.u[i]?'gu':'ge')+'">'+(i+1)+'</div>';
+return h+'</div>';
+}
+function gd(){
+var h='<div class="glasses">';
+for(var i=0;i<4;i++){
+if(S.u[i]){
+var ok=S.gx&&S.gx[i]!==undefined?S.gx[i]:false;
+h+='<div class="gb gu">'+(i+1)+'<span class="chk '+(ok?'cok':'cnk')+'">'+(ok?'✓':'✗')+'</span></div>';
+}else h+='<div class="gb ge">'+(i+1)+'</div>';
+}
+return h+'</div>';
+}
+function dt(){
+var h='<div class="dots">';
+for(var i=0;i<S.rc;i++)h+='<div class="dt '+(i<=S.ri?'don':'dof')+'"></div>';
+return h+'</div>';
+}
+function rs(){
+var h='';
+if(S.rv)for(var i=0;i<S.rv.length;i++){
+var e=S.rv[i];
+h+='<div class="rr"><span class="rn">'+e.g+'.</span><span>'+esc(e.n)+'</span></div>';
+}
+return h;
+}
+
+// ============================================================
+// H2H phone creation flow
+// ============================================================
+function h2hStart(){
+h2hSetup={step:'mode'};
+rn();
+}
+function rh2hSetup(){
+var v=$('v');
+var st=h2hSetup.step,h='';
+if(st==='mode'){
+h+='<div class="st">HEAD TO HEAD</div>';
+h+='<div class="msg">Choose a sub-mode</div>';
+h+='<button class="btn bp" onclick="h2hMode(0)">2x2 — Two Bottles, Two Players</button>';
+h+='<button class="btn bp" onclick="h2hMode(1)">Random — Randomized Pour</button>';
+h+='<button class="btn bp" onclick="h2hMode(2)">Premium — Spot the Premium</button>';
+h+='<button class="btn bs" onclick="h2hSetup=null;rn()">Cancel</button>';
+}else if(st==='count'){
+h+='<div class="st">GLASS COUNT</div>';
+h+='<div class="msg">How many glasses?</div>';
+h+='<div class="gsel">';
+for(var g=2;g<=4;g++)
+h+='<div class="gbtn" onclick="h2hCount('+g+')">'+g+'</div>';
+h+='</div>';
+h+='<button class="btn bs" onclick="h2hSetup.step=\'mode\';rn()">Back</button>';
+}else if(st==='bottles'){
+var bc=h2hSetup.bottles?h2hSetup.bottles.length:0;
+var bt=h2hSetup.bottlesNeeded||3;
+h+='<div class="st">SELECT BOTTLES</div>';
+h+='<div class="msg">Bottle '+(bc+1)+' of '+bt+'</div>';
+if(h2hSetup.bottles&&h2hSetup.bottles.length>0){
+for(var i=0;i<h2hSetup.bottles.length;i++)
+h+='<div class="fi"><span>'+esc(h2hSetup.bottles[i])+'</span></div>';
+}
+h+='<input type="text" id="hbi" placeholder="Enter bottle name" maxlength="21" autocomplete="off" autocapitalize="words">';
+h+='<button class="btn bp" onclick="h2hBottle()">Add Bottle</button>';
+h+='<button class="btn bs" onclick="h2hSetup.step=\'count\';rn()">Back</button>';
+}else if(st==='lobby'){
+h+='<div class="st">LOBBY</div>';
+if(H&&H.players&&H.players.length>0){
+for(var i=0;i<H.players.length;i++){
+var p=H.players[i];
+h+='<div class="plr"><span class="pdot '+(p.c?'pcon':'pdis')+'"></span>'+esc(p.n)+'</div>';
+}
+h+='<div class="hint">'+H.players.length+' player(s) joined</div>';
+}else{
+h+='<div class="msg">Waiting for players to join...</div>';
+}
+var req=H&&H.total?H.total:2;
+var cur=H&&H.players?H.players.length:0;
+if(cur>=req)h+='<button class="btn bp" onclick="tx({a:\'h2h_go\'})">Start Game</button>';
+else h+='<button class="btn bs" disabled>Need '+req+' players ('+cur+' joined)</button>';
+h+='<div class="hint">Players connect to this Wi-Fi and open the page</div>';
+}
+v.innerHTML=h;
+if(st==='bottles'){var hbi=$('hbi');if(hbi)hbi.focus();}
+}
+function h2hMode(m){
+h2hSetup.mode=m;
+tx({a:'h2h_create',v:m});
+if(m===0){
+h2hSetup.step='bottles';h2hSetup.bottlesNeeded=2;h2hSetup.bottles=[];
+}else{
+h2hSetup.step='count';
+}
+rn();
+}
+function h2hCount(c){
+h2hSetup.count=c;
+h2hSetup.bottlesNeeded=c;
+h2hSetup.bottles=[];
+h2hSetup.step='bottles';
+tx({a:'h2h_count',v:c});
+rn();
+}
+function h2hBottle(){
+var bi=$('hbi');if(!bi)return;
+var v=bi.value.trim();if(!v)return;
+if(!h2hSetup.bottles)h2hSetup.bottles=[];
+h2hSetup.bottles.push(v);
+tx({a:'h2h_bottle',v:v});
+if(h2hSetup.bottles.length>=h2hSetup.bottlesNeeded){
+h2hSetup.step='lobby';
+}
+rn();
+}
+
+function showFavCard(){
+var fc=$('fc');
+if(!S||S.a){fc.style.display='none';return;}
+if(h2hSetup){fc.style.display='none';return;}
+fc.style.display='';
+}
+function showWifiCard(){
+var wc=$('wc');
+if(!wc)return;
+if(!S||S.a||S.sta){wc.style.display='none';return;}
+if(h2hSetup){wc.style.display='none';return;}
+wc.style.display='';
+rwifi();
+}
+function rfav(){
+var fc=$('fc');
+if(!F){fc.innerHTML='';return;}
+var h='<div class="fhdr" onclick="fOpen=!fOpen;rfav()"><div class="st" style="margin:0">Favorites</div><span>'+(fOpen?'▲':'▼')+'</span></div>';
+if(fOpen){
+h+='<div class="fadd"><input type="text" id="fi" placeholder="Add favorite" maxlength="21" autocomplete="off" autocapitalize="words">';
+h+='<button class="btn bp fadd" onclick="favAdd()">Add</button></div>';
+h+='<div id="fe"></div>';
+if(F.list.length===0){h+='<div class="msg">No favorites yet</div>';}
+else{for(var i=0;i<F.list.length;i++){
+h+='<div class="fi"><span>'+esc(F.list[i])+'</span><button class="fx" onclick="favDel('+i+')">&times;</button></div>';
+}}
+h+='<div class="fcnt">'+F.cnt+' / '+F.max+'</div>';
+}
+fc.innerHTML=h;
+}
+function favAdd(){
+var fi=$('fi');if(!fi)return;
+var v=fi.value.trim();if(!v)return;
+if(v.length>21){$('fe').innerHTML='<div class="ferr">Max 21 characters</div>';return;}
+if(F&&F.cnt>=F.max){$('fe').innerHTML='<div class="ferr">Favorites list full</div>';return;}
+if(F){for(var i=0;i<F.list.length;i++){if(F.list[i].toLowerCase()===v.toLowerCase()){
+$('fe').innerHTML='<div class="ferr">Already in favorites</div>';return;}}}
+tx({a:'fav_add',v:v});fi.value='';
+}
+function favDel(i){tx({a:'fav_del',v:i});}
+function rwifi(){
+var wc=$('wc');
+if(!wc)return;
+var h='<div class="fhdr" onclick="wOpen=!wOpen;rwifi()"><div class="st" style="margin:0">Wi-Fi Setup</div><span>'+(wOpen?'▲':'▼')+'</span></div>';
+if(wOpen){
+if(wMsg){h+='<div class="msg" style="color:'+(wSta?'#4CAF50':'#F44336')+'">'+esc(wMsg)+'</div>';}
+if(wSta){
+h+='<div class="hint">Reconnect to your network, then visit the IP above or http://flight.local</div>';
+}else{
+h+='<button class="btn bs" onclick="wNets=null;wSel=\'\';wMsg=\'\';tx({a:\'wifi_scan\'})">Scan for Networks</button>';
+if(wNets){
+for(var i=0;i<wNets.length;i++){
+var n=wNets[i];
+var sel=wSel===n.s;
+h+='<div class="wnet'+(sel?' sel':'')+'" onclick="wSel=\''+esc(n.s).replace(/'/g,"\\'")+'\';rwifi()">';
+h+='<span>'+esc(n.s)+(n.e?'<span class="wlock"> 🔒</span>':'')+'</span>';
+h+='<span class="wrssi">'+rssiBar(n.r)+'</span></div>';
+}
+if(wSel){
+h+='<input type="password" id="wp" placeholder="Password for '+esc(wSel)+'" autocomplete="off">';
+h+='<button class="btn bp" onclick="wconn()">Connect</button>';
+}
+}
+}
+}
+wc.innerHTML=h;
+}
+function rssiBar(r){
+var b=r>-50?4:r>-60?3:r>-70?2:1;
+var s='';for(var i=0;i<4;i++)s+=i<b?'▰':'▱';
+return s;
+}
+function wconn(){
+var wp=$('wp');
+var p=wp?wp.value:'';
+wMsg='Connecting...';rwifi();
+tx({a:'wifi_connect',s:wSel,p:p});
+}
+function rh(){
+var v=$('v');
+if(!H){return;}
+if(h2hSetup&&h2hSetup.step==='lobby'){rh2hSetup();return;}
+$('fc').style.display='none';
+var wc=$('wc');if(wc)wc.style.display='none';
+var ph=H.phase,md=H.mode||'2x2',h='';
+if(!HJ&&!h2hSetup&&(ph==='lobby'||ph==='bottles'||ph==='select'||ph==='count')){
+h+='<div class="st">HEAD TO HEAD</div>';
+h+='<div class="msg">Enter your name to join</div>';
+h+='<input type="text" id="hn" placeholder="Your name" maxlength="12" autocomplete="off" autocapitalize="words">';
+h+='<button class="btn bp" onclick="hjoin()">Join Game</button>';
+if(H.players&&H.players.length>0){
+h+='<div class="msg" style="margin-top:12px">Players:</div>';
+for(var i=0;i<H.players.length;i++){
+var p=H.players[i];
+h+='<div class="plr"><span class="pdot '+(p.c?'pcon':'pdis')+'"></span>'+esc(p.n)+'</div>';
+}}
+h+='<div class="hint">Waiting for host to start</div>';
+v.innerHTML=h;
+var hn=$('hn');if(hn)hn.focus();
+return;
+}
+if(ph==='lobby'){
+h+='<div class="st">LOBBY</div>';
+h+='<div class="msg">Waiting for game to start...</div>';
+for(var i=0;i<H.players.length;i++){
+var p=H.players[i];
+h+='<div class="plr"><span class="pdot '+(p.c?'pcon':'pdis')+'"></span>'+esc(p.n)+'</div>';
+}
+h+='<div class="hint">'+H.players.length+' player(s) joined</div>';
+}else if(ph==='pouring'){
+h+='<div class="st">Pouring...</div>';
+h+='<div class="msg">Please wait</div>';
+h+='<div class="hint">The host is pouring glasses</div>';
+}else if(ph==='tasting'){
+h+='<div class="st">TASTING TIME</div>';
+h+='<div class="msg">Take one glass each</div>';
+h+='<div class="hint">Waiting for host to continue</div>';
+}else if(md==='2x2'&&(ph==='assign'||ph==='guessing')){
+if(HY&&HY.glasses&&!HR){
+if(ph==='assign'){
+h+='<div class="st">YOUR GLASSES</div>';
+h+='<div class="big">'+HY.glasses[0]+' & '+HY.glasses[1]+'</div>';
+h+='<div class="msg">Take glasses '+HY.glasses[0]+' and '+HY.glasses[1]+'</div>';
+h+='<div class="hint">Taste both and guess which is which</div>';
+}else{
+h+='<div class="st">GUESS</div>';
+h+='<div class="msg">Which bottle is in each glass?</div>';
+if(H.bottles){
+for(var g=0;g<2;g++){
+h+='<div style="margin:12px 0"><div style="font-size:14px;color:#888;margin-bottom:4px">Glass '+HY.glasses[g]+':</div>';
+h+='<div class="gsel">';
+for(var b=0;b<H.bottles.length;b++){
+var sel=(g===0?hg0:hg1)===b;
+h+='<div class="gbtn'+(sel?' active':'')+'" onclick="hgs('+g+','+b+')">'+esc(H.bottles[b])+'</div>';
+}
+h+='</div></div>';
+}}
+var ready=(hg0>=0&&hg1>=0);
+h+='<button class="btn bp'+(ready?'':' bs')+'" onclick="hsub()"'+(ready?'':' disabled')+'>Submit Guess</button>';
+if(H.submitted!==undefined)h+='<div class="hint">'+H.submitted+' of '+H.total+' submitted</div>';
+}}else{
+h+='<div class="st">WAITING</div>';
+h+='<div class="msg">Waiting for assignments...</div>';
+}
+}else if(md==='random'&&ph==='guessing'){
+if(!HR){
+var gc=H.gc||4;
+var claimed=[];
+if(H.players)for(var i=0;i<H.players.length;i++){if(H.players[i].gl>0)claimed.push(H.players[i].gl);}
+if(hClaim===0){
+h+='<div class="st">WHICH GLASS?</div>';
+h+='<div class="msg">Which glass did you take?</div>';
+h+='<div class="gsel">';
+for(var g=1;g<=gc;g++){
+var taken=false;
+for(var c=0;c<claimed.length;c++){if(claimed[c]===g)taken=true;}
+if(taken){h+='<div class="gbtn" style="opacity:0.3;cursor:default">'+g+'</div>';}
+else{h+='<div class="gbtn" onclick="hclaim('+g+')">'+g+'</div>';}
+}
+h+='</div>';
+h+='<div class="hint">Select your glass number</div>';
+}else{
+h+='<div class="st">GUESS</div>';
+h+='<div class="msg">Glass '+hClaim+' — What\'s in your glass?</div>';
+if(H.bottles){
+for(var b=0;b<H.bottles.length;b++){
+h+='<div class="pi" onclick="hsubr('+b+')">'+esc(H.bottles[b])+'</div>';
+}}
+h+='<button class="btn bs" onclick="hClaim=0;lk=false;rh()">Change Glass</button>';
+if(H.submitted!==undefined)h+='<div class="hint">'+H.submitted+' of '+H.total+' submitted</div>';
+}
+}else{
+h+='<div class="st">SUBMITTED</div>';
+h+='<div class="msg">Waiting for other players...</div>';
+}
+}else if(md==='premium'&&ph==='guessing'){
+if(!HR){
+var gc=H.gc||4;
+var claimed=[];
+if(H.players)for(var i=0;i<H.players.length;i++){if(H.players[i].gl>0)claimed.push(H.players[i].gl);}
+if(hClaim===0){
+h+='<div class="st">WHICH GLASS?</div>';
+h+='<div class="msg">Which glass did you take?</div>';
+h+='<div class="gsel">';
+for(var g=1;g<=gc;g++){
+var taken=false;
+for(var c=0;c<claimed.length;c++){if(claimed[c]===g)taken=true;}
+if(taken){h+='<div class="gbtn" style="opacity:0.3;cursor:default">'+g+'</div>';}
+else{h+='<div class="gbtn" onclick="hclaim('+g+')">'+g+'</div>';}
+}
+h+='</div>';
+h+='<div class="hint">Select your glass number</div>';
+}else{
+h+='<div class="st">PREMIUM POUR</div>';
+h+='<div class="msg">Did you get the premium?</div>';
+if(H.premium)h+='<div class="nm">'+esc(H.premium)+'</div>';
+h+='<div class="btns" style="margin-top:16px">';
+h+='<button class="btn bp" onclick="hsubp(1)">YES</button>';
+h+='<button class="btn bd" onclick="hsubp(0)">NO</button>';
+h+='</div>';
+h+='<button class="btn bs" style="margin-top:8px" onclick="hClaim=0;lk=false;rh()">Change Glass</button>';
+if(H.submitted!==undefined)h+='<div class="hint">'+H.submitted+' of '+H.total+' submitted</div>';
+}
+}else{
+h+='<div class="st">SUBMITTED</div>';
+h+='<div class="msg">Waiting for other players...</div>';
+}
+}else if(ph==='results'){
+h+='<div class="st">RESULTS</div>';
+if(HR){
+if(HR.g){
+for(var i=0;i<HR.g.length;i++){
+var r=HR.g[i];
+h+='<div class="plr"><span class="'+(r.ok?'rok':'rnk')+'">'+(r.ok?'✓':'✗')+'</span> Glass '+r.glass+': '+(r.ok?'Correct!':'Wrong')+'</div>';
+}
+}else if(HR.had!==undefined){
+h+='<div class="plr"><span class="'+(HR.ok?'rok':'rnk')+'">'+(HR.ok?'✓':'✗')+'</span> Glass '+HR.glass+'</div>';
+if(HR.ok){h+='<div class="msg" style="color:#4CAF50">Correct!</div>';}
+else{h+='<div class="msg" style="color:#F44336">Wrong!</div>';}
+h+='<div class="hint">'+(HR.had?'You had the premium!':'You did not have the premium.')+'</div>';
+h+='<div class="hint">Glass '+HR.premGlass+' was '+esc(HR.premium)+'</div>';
+}else{
+h+='<div class="plr"><span class="'+(HR.ok?'rok':'rnk')+'">'+(HR.ok?'✓':'✗')+'</span> Glass '+HR.glass+'</div>';
+if(HR.ok){h+='<div class="msg" style="color:#4CAF50">Correct!</div>';}
+else{h+='<div class="msg" style="color:#F44336">Wrong!</div>';
+h+='<div class="hint">It was actually: '+esc(HR.actual)+'</div>';}
+}
+}else{
+h+='<div class="msg">Waiting for results...</div>';
+}
+}else if(ph==='reveal'||ph==='done'){
+h+='<div class="st">'+(ph==='done'?'COMPLETE':'REVEAL')+'</div>';
+h+='<div class="msg">See the device for details</div>';
+}else{
+h+='<div class="st">HEAD TO HEAD</div>';
+h+='<div class="msg">Game in progress...</div>';
+}
+v.innerHTML=h;
+}
+function hjoin(){
+var hn=$('hn');if(!hn)return;
+var v=hn.value.trim();if(!v)return;
+HN=v;HJ=true;
+tx({a:'h2h_join',v:v});
+}
+function hgs(g,b){
+if(g===0)hg0=b;else hg1=b;
+lk=false;rh();
+}
+function hsub(){
+if(hg0<0||hg1<0)return;
+tx({a:'h2h_guess',g0:hg0,g1:hg1});
+}
+function hclaim(g){
+hClaim=g;
+tx({a:'h2h_claim',v:g});
+lk=false;rh();
+}
+function hsubr(b){
+tx({a:'h2h_guess_random',v:b});
+}
+function hsubp(v){
+tx({a:'h2h_guess_premium',v:v});
+}
+document.addEventListener('keydown',function(e){
+if(e.key==='Enter'&&!authed&&document.activeElement===$('pp'))doAuth();
+if(e.key==='Enter'&&S&&S.s==='NM')sn();
+if(e.key==='Enter'&&S&&S.s==='BS')sb();
+if(e.key==='Enter'&&fOpen&&document.activeElement===$('fi'))favAdd();
+if(e.key==='Enter'&&!HJ&&$('hn')&&document.activeElement===$('hn'))hjoin();
+if(e.key==='Enter'&&h2hSetup&&h2hSetup.step==='bottles'&&document.activeElement===$('hbi'))h2hBottle();
+if(e.key==='Enter'&&wOpen&&wSel&&document.activeElement===$('wp'))wconn();
+});
+cn();
+</script>
+</body>
+</html>

@@ -4,11 +4,16 @@
 #include "audio.h"
 #include "motor.h"
 #include "input.h"
-#include "browse.h"
 #include "wifi_portal.h"
-#include "screens.h"
 #include "settings.h"
 #include "battery.h"
+
+#ifndef HEADLESS_BUILD
+#include "browse.h"
+#include "screens.h"
+#else
+extern bool runHomingSequence();
+#endif
 
 // ============================================================
 // Blind Flight — Head-to-Head Module (Session 23)
@@ -275,10 +280,12 @@ static void buildRevealMap() {
 // ============================================================
 
 static void runH2HPourCycle() {
+#ifndef HEADLESS_BUILD
     if (batteryIsLockout()) {
         Serial.println("[H2H] Battery lockout during pour");
         return;
     }
+#endif
 
     uiResetIdleTimer();
 
@@ -286,8 +293,6 @@ static void runH2HPourCycle() {
         runHomingSequence();
         homedThisFlight = true;
     }
-
-    TFT_eSPI* tft = uiGetTFT();
 
     if (subMode == H2H_SUB_2X2 || subMode == H2H_SUB_PREMIUM) {
         currentGlass = pourOrder[pourCount];
@@ -302,28 +307,32 @@ static void runH2HPourCycle() {
                   pourCount + 1, h2hGlassCount, currentGlass,
                   h2hBottles[bottleIdx]);
 
-    // Selection animation
-    tft->fillScreen(COL_BG);
-    uiDrawTitleBar("HEAD TO HEAD", COL_ACCENT);
+#ifndef HEADLESS_BUILD
+    TFT_eSPI* tft = uiGetTFT();
 
     char pourNum[4];
     snprintf(pourNum, sizeof(pourNum), "%d", pourCount + 1);
+
+    tft->fillScreen(COL_BG);
+    uiDrawTitleBar("HEAD TO HEAD", COL_ACCENT);
     uiDrawCenteredText(pourNum, CONTENT_Y + 60, FONT_XLARGE, COL_ACCENT);
     uiDrawCenteredText("Randomizing", CONTENT_Y + 120, FONT_BODY, COL_TEXT);
     uiDrawSoftButtons("", "");
+#endif
 
     audioPlayTone(TONE_SELECT);
     delayWithAudio(GAME_SELECT_PAUSE_MS);
     audioPlayTone(TONE_CONFIRM);
     delayWithAudio(GAME_SELECT_REVEAL_MS);
 
-    // Spin motor
+#ifndef HEADLESS_BUILD
     tft->fillScreen(COL_BG);
     uiDrawTitleBar("SPINNING", COL_MOVING);
     uiDrawCenteredText(pourNum, CONTENT_Y + 45, FONT_XLARGE, COL_MOVING);
     uiDrawCenteredText("Randomizing", CONTENT_Y + 105, FONT_BODY, COL_TEXT);
     uiDrawHint("Please wait...", CONTENT_Y + 135);
     uiDrawSoftButtons("", "");
+#endif
 
     int extraRevs = motorGetExtraRevs();
     wifiPortalBroadcastNow();
@@ -340,13 +349,15 @@ static void runH2HPourCycle() {
 
 static void runFinalSpin() {
     uiResetIdleTimer();
-    TFT_eSPI* tft = uiGetTFT();
 
+#ifndef HEADLESS_BUILD
+    TFT_eSPI* tft = uiGetTFT();
     tft->fillScreen(COL_BG);
     uiDrawTitleBar("SPINNING", COL_MOVING);
     uiDrawCenteredText("Randomizing", CONTENT_Y + 70, FONT_BODY, COL_TEXT);
     uiDrawHint("Please wait...", CONTENT_Y + 100);
     uiDrawSoftButtons("", "");
+#endif
 
     delayWithAudio(400);
     int steps = 3 * MICROSTEPS_PER_REV + random(MICROSTEPS_PER_REV);
@@ -362,8 +373,10 @@ static void runFinalSpin() {
 }
 
 // ============================================================
-// Draw functions
+// Draw functions (screen build only)
 // ============================================================
+
+#ifndef HEADLESS_BUILD
 
 static void drawModeSelect(bool fullRedraw) {
     if (!fullRedraw) return;
@@ -1084,6 +1097,12 @@ const Screen screenH2H = {
     h2hOnEnter
 };
 
+#endif // !HEADLESS_BUILD
+
+// ============================================================
+// Public getters (both builds)
+// ============================================================
+
 bool h2hIsActive() {
     return h2hActive;
 }
@@ -1317,4 +1336,88 @@ void h2hPhoneDisconnect(uint8_t clientNum) {
             return;
         }
     }
+}
+
+// ============================================================
+// Phone-based H2H creation (Session 25)
+// ============================================================
+
+void h2hStartFromPhone(uint8_t clientNum, H2HSubMode mode) {
+    if (h2hActive || gameIsActive()) return;
+
+    h2hActive = true;
+    resetSession();
+    subMode = mode;
+
+    if (mode == H2H_SUB_2X2) {
+        h2hGlassCount = 4;
+        phase = H2H_BOTTLE_SELECT;
+        Serial.printf("[H2H] Phone created 2x2 (need %d bottles)\n", H2H_2X2_BOTTLES);
+    } else {
+        phase = H2H_COUNT_SELECT;
+        Serial.printf("[H2H] Phone created %s (need glass count)\n",
+                      mode == H2H_SUB_PREMIUM ? "Premium" : "Random");
+    }
+
+    uiRequestRedraw();
+    wifiPortalBroadcastNow();
+}
+
+void h2hPhoneSetGlassCount(int count) {
+    if (!h2hActive || phase != H2H_COUNT_SELECT) return;
+    if (count < 2 || count > 4) return;
+
+    h2hGlassCount = count;
+    phase = H2H_BOTTLE_SELECT;
+
+    Serial.printf("[H2H] Phone set glass count: %d\n", count);
+    uiRequestRedraw();
+    wifiPortalBroadcastNow();
+}
+
+void h2hPhoneAddBottle(const char* name) {
+    if (!h2hActive || phase != H2H_BOTTLE_SELECT) return;
+    if (!name || !name[0]) return;
+
+    int needed;
+    if (subMode == H2H_SUB_2X2) needed = H2H_2X2_BOTTLES;
+    else needed = h2hGlassCount;
+
+    if (bottleCount >= needed) return;
+
+    strncpy(h2hBottles[bottleCount], name, MAX_GLASS_NAME - 1);
+    h2hBottles[bottleCount][MAX_GLASS_NAME - 1] = '\0';
+
+    Serial.printf("[H2H] Phone bottle %d: %s\n", bottleCount + 1, h2hBottles[bottleCount]);
+
+    bottleCount++;
+    if (bottleCount >= needed) {
+        if (subMode == H2H_SUB_2X2)         build2x2PourOrder();
+        else if (subMode == H2H_SUB_RANDOM)  buildRandomPourOrder();
+        else                                  buildPremiumPourOrder();
+
+        phase = H2H_LOBBY;
+        Serial.println("[H2H] All bottles entered — lobby open");
+    }
+
+    uiRequestRedraw();
+    wifiPortalBroadcastNow();
+}
+
+void h2hPhoneStartGame(uint8_t clientNum) {
+    if (!h2hActive || phase != H2H_LOBBY) return;
+
+    int connectedCount = 0;
+    for (int i = 0; i < playerCount; i++) {
+        if (players[i].connected) connectedCount++;
+    }
+    int required = h2hGetRequiredPlayers();
+    if (connectedCount < required) {
+        Serial.printf("[H2H] Not enough players: %d/%d\n", connectedCount, required);
+        return;
+    }
+
+    Serial.println("[H2H] Phone start — beginning pours");
+    audioPlayTone(TONE_CONFIRM);
+    runH2HPourCycle();
 }

@@ -28,7 +28,11 @@
 // ============================================================
 
 #include <Arduino.h>
+#ifndef HEADLESS_BUILD
 #include <TFT_eSPI.h>
+#else
+class TFT_eSPI;
+#endif
 #include "input.h"
 #include "transitions.h"
 
