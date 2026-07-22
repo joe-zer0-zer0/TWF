@@ -1,0 +1,695 @@
+Type,Distillery,Product,Proof,PriceTier,AgeYears
+Bourbon,Buffalo Trace,Buffalo Trace,90,1,0
+Bourbon,Buffalo Trace,Eagle Rare 10yr,90,2,10
+Bourbon,Buffalo Trace,Blanton's Original,93,3,0
+Bourbon,Buffalo Trace,W.L. Weller Special,90,2,0
+Bourbon,Buffalo Trace,W.L. Weller 107,107,2,0
+Bourbon,Buffalo Trace,W.L. Weller 12yr,90,3,12
+Bourbon,Buffalo Trace,E.H. Taylor SmB,100,2,0
+Bourbon,Buffalo Trace,E.H. Taylor SiB,100,3,0
+Bourbon,Buffalo Trace,Stagg Jr,0,3,0
+Bourbon,Buffalo Trace,Elmer T. Lee SiB,90,2,0
+Bourbon,Buffalo Trace,Benchmark No. 8,80,1,0
+Bourbon,Heaven Hill,Elijah Craig SmB,94,2,0
+Bourbon,Heaven Hill,Elijah Craig BP,0,3,0
+Bourbon,Heaven Hill,Elijah Craig Toasted,94,2,0
+Bourbon,Heaven Hill,Evan Williams Black,86,1,0
+Bourbon,Heaven Hill,Evan Williams BiB,100,1,0
+Bourbon,Heaven Hill,Evan Williams 1783,86,1,0
+Bourbon,Heaven Hill,Evan Williams SiB,87,2,0
+Bourbon,Heaven Hill,Larceny SmB,92,1,0
+Bourbon,Heaven Hill,Larceny BP,0,3,0
+Bourbon,Heaven Hill,Henry McKenna 10yr,100,2,10
+Bourbon,Heaven Hill,Old Fitzgerald BiB,100,3,0
+Bourbon,Heaven Hill,Fighting Cock,103,1,0
+Bourbon,Heaven Hill,Heaven Hill BiB,100,1,0
+Bourbon,Jim Beam,Jim Beam White,80,1,0
+Bourbon,Jim Beam,Jim Beam Black,86,1,0
+Bourbon,Jim Beam,Jim Beam Double Oak,86,1,0
+Bourbon,Jim Beam,Knob Creek 9yr,100,2,9
+Bourbon,Jim Beam,Knob Creek 12yr,100,3,12
+Bourbon,Jim Beam,Knob Creek SiB,120,2,9
+Bourbon,Jim Beam,Booker's,0,3,0
+Bourbon,Jim Beam,Baker's 7yr SiB,107,3,7
+Bourbon,Jim Beam,Basil Hayden's,80,2,0
+Bourbon,Jim Beam,Old Grand-Dad 114,114,1,0
+Bourbon,Jim Beam,Old Grand-Dad BiB,100,1,0
+Bourbon,Jim Beam,Little Book,0,4,0
+Bourbon,Jim Beam,Legent,94,2,0
+Bourbon,Wild Turkey,Wild Turkey 101,101,1,0
+Bourbon,Wild Turkey,Wild Turkey 81,81,1,0
+Bourbon,Wild Turkey,Rare Breed,0,2,0
+Bourbon,Wild Turkey,Russell's Res 10yr,90,2,10
+Bourbon,Wild Turkey,Russell's Res SiB,110,3,0
+Bourbon,Wild Turkey,Kentucky Spirit,101,3,0
+Bourbon,Wild Turkey,Longbranch,86,2,0
+Bourbon,Woodford Reserve,Woodford Reserve,90,2,0
+Bourbon,Woodford Reserve,Woodford Double Oak,90,3,0
+Bourbon,Woodford Reserve,Woodford Batch Proof,0,4,0
+Bourbon,Woodford Reserve,Woodford Wheat,90,2,0
+Bourbon,Woodford Reserve,Woodford Malt,90,2,0
+Bourbon,Maker's Mark,Maker's Mark,90,1,0
+Bourbon,Maker's Mark,Maker's 46,94,2,0
+Bourbon,Maker's Mark,Maker's Cask Str,0,3,0
+Bourbon,Maker's Mark,Maker's Private Sel,0,3,0
+Bourbon,Maker's Mark,Maker's Cellar Aged,0,4,0
+Bourbon,Maker's Mark,Maker's FAE-01,0,3,0
+Bourbon,Maker's Mark,Maker's FAE-02,0,3,0
+Bourbon,Four Roses,Four Roses Yellow,80,1,0
+Bourbon,Four Roses,Four Roses SmB,90,2,0
+Bourbon,Four Roses,Four Roses SmB Sel,104,3,0
+Bourbon,Four Roses,Four Roses SiB,100,2,0
+Bourbon,Four Roses,Four Roses SiB BS,0,3,0
+Bourbon,Old Forester,Old Forester 86,86,1,0
+Bourbon,Old Forester,Old Forester 100,100,1,0
+Bourbon,Old Forester,Old Forester 1870,90,2,0
+Bourbon,Old Forester,Old Forester 1897,100,2,0
+Bourbon,Old Forester,Old Forester 1910,93,3,0
+Bourbon,Old Forester,Old Forester 1920,115,3,0
+Bourbon,Old Forester,Old Forester SiB,0,3,0
+Bourbon,Angel's Envy,Angel's Envy Bourbon,87,3,0
+Bourbon,Angel's Envy,Angel's Envy Cask Str,0,4,0
+Bourbon,Michter's,Michter's US*1 Brbn,91,2,0
+Bourbon,Michter's,Michter's Toasted,91,3,0
+Bourbon,Michter's,Michter's US*1 SrMsh,91,2,0
+Bourbon,Michter's,Michter's 10yr Brbn,94,4,10
+Bourbon,Bulleit,Bulleit Bourbon,90,1,0
+Bourbon,Bulleit,Bulleit 10yr,91,2,10
+Bourbon,Bulleit,Bulleit Barrel Str,0,3,0
+Bourbon,Bulleit,Bulleit BiB,100,2,0
+Bourbon,Barton 1792,1792 Small Batch,94,2,0
+Bourbon,Barton 1792,1792 Full Proof,125,2,0
+Bourbon,Barton 1792,1792 Single Barrel,99,2,0
+Bourbon,Barton 1792,1792 BiB,100,2,0
+Bourbon,Barton 1792,1792 Sweet Wheat,91,2,0
+Bourbon,Barton 1792,1792 Port Finish,89,2,0
+Bourbon,Bardstown Bourbon,Bardstown Discovery,0,4,0
+Bourbon,Bardstown Bourbon,Bardstown Fusion,0,3,0
+Bourbon,Bardstown Bourbon,Bardstown Origin,0,3,0
+Bourbon,Bardstown Bourbon,Bardstown Collab,0,4,0
+Bourbon,Willet,Willet Pot Still,94,2,0
+Bourbon,Willet,Noah's Mill,114,3,0
+Bourbon,Willet,Rowan's Creek,100,2,0
+Bourbon,Willet,Johnny Drum,0,2,0
+Bourbon,New Riff,New Riff Bourbon,100,2,0
+Bourbon,New Riff,New Riff SiB,0,3,0
+Bourbon,New Riff,New Riff Backsetter,0,2,0
+Bourbon,New Riff,New Riff Maltster,0,2,0
+Bourbon,Wilderness Trail,WT Bourbon BiB,100,2,0
+Bourbon,Wilderness Trail,WT SiB Bourbon,0,3,0
+Bourbon,Wilderness Trail,WT Wheated BiB,100,2,0
+Bourbon,KY Peerless,Peerless Bourbon,0,3,0
+Bourbon,KY Peerless,Peerless SmB,0,3,0
+Bourbon,KY Peerless,Peerless SiB,0,4,0
+Bourbon,KY Peerless,Peerless Double Oak,0,4,0
+Bourbon,Rabbit Hole,Dareringer Bourbon,93,3,0
+Bourbon,Rabbit Hole,Cavehill Bourbon,95,3,0
+Bourbon,Rabbit Hole,Heigold Bourbon,95,3,0
+Bourbon,Castle & Key,Castle & Key SmB,0,2,0
+Bourbon,Castle & Key,Roots of Ruin,0,2,0
+Bourbon,Lux Row,Ezra Brooks 99,99,1,0
+Bourbon,Lux Row,Ezra Brooks SiB,0,2,0
+Bourbon,Lux Row,Rebel 100,100,1,0
+Bourbon,Lux Row,Rebel SiB,0,2,0
+Bourbon,Lux Row,Blood Oath,0,4,0
+Bourbon,Lux Row,David Nicholson 1843,100,2,0
+Bourbon,Lux Row,David Nicholson Res,0,2,0
+Bourbon,Garrison Brothers,Garrison SmB,0,3,0
+Bourbon,Garrison Brothers,Garrison SiB,0,4,0
+Bourbon,Garrison Brothers,Garrison Balmorhea,0,4,0
+Bourbon,Garrison Brothers,Garrison Cowboy,0,4,0
+Bourbon,Garrison Brothers,Garrison HoneyDew,0,3,0
+Bourbon,Stellum,Stellum Bourbon,0,3,0
+Bourbon,Stellum,Stellum Equinox,0,3,0
+Bourbon,Stellum,Stellum SiB,0,3,0
+Bourbon,Smoke Wagon,Smoke Wagon SmB,0,2,0
+Bourbon,Smoke Wagon,Smoke Wagon Uncut,0,3,0
+Bourbon,Smoke Wagon,Smoke Wagon Str Brbn,0,2,0
+Bourbon,Starlight,Starlight Bourbon,0,3,0
+Bourbon,Starlight,Starlight Double Oak,0,3,0
+Bourbon,Starlight,Starlight Carl T.,0,3,0
+Bourbon,Penelope,Penelope Bourbon,0,2,0
+Bourbon,Penelope,Penelope Barrel Str,0,3,0
+Bourbon,Penelope,Penelope Four Grain,0,2,0
+Bourbon,Penelope,Penelope Architect,0,3,0
+Bourbon,Penelope,Penelope Toasted,0,2,0
+Bourbon,Jefferson's,Jefferson's SmB,82,2,0
+Bourbon,Jefferson's,Jefferson's Reserve,90,3,0
+Bourbon,Jefferson's,Jefferson's Ocean,90,3,0
+Bourbon,Jefferson's,Jefferson's Grand Sel,0,4,0
+Bourbon,Town Branch,Town Branch Bourbon,80,2,0
+Bourbon,Town Branch,Town Branch SiB,0,3,0
+Bourbon,Calumet Farm,Calumet Farm Bourbon,0,2,0
+Bourbon,Calumet Farm,Calumet Farm SmB,0,3,0
+Bourbon,Calumet Farm,Calumet Srk Black,0,3,0
+Bourbon,Belle Meade,Belle Meade Bourbon,90,2,0
+Bourbon,Belle Meade,Belle Meade Reserve,0,3,0
+Bourbon,Belle Meade,Belle Meade SiB,0,3,0
+Bourbon,Belle Meade,Belle Meade Cask Str,0,3,0
+Bourbon,Kentucky Owl,KY Owl Bourbon,0,4,0
+Bourbon,Kentucky Owl,KY Owl Confiscated,0,4,0
+Bourbon,Kentucky Owl,KY Owl Takumi,0,4,0
+Bourbon,Widow Jane,Widow Jane 10yr,91,3,10
+Bourbon,Widow Jane,Widow Jane Baby Jane,0,3,0
+Bourbon,Widow Jane,Widow Jane The Vaults,0,4,0
+Bourbon,Widow Jane,Widow Jane Oak&Apple,0,3,0
+Bourbon,Yellowstone,Yellowstone Select,93,2,0
+Bourbon,Yellowstone,Yellowstone Ltd Ed,0,3,0
+Bourbon,Yellowstone,Yellowstone 150th,0,4,0
+Bourbon,Pinhook,Pinhook Bourbon War,0,2,0
+Bourbon,Frey Ranch,Frey Ranch Bourbon,90,3,0
+Bourbon,Frey Ranch,Frey Ranch SiB,0,3,0
+Bourbon,Blue Run,Blue Run High Rye,0,4,0
+Bourbon,Blue Run,Blue Run Reflection,0,4,0
+Bourbon,MB Roland,MB Roland Bourbon,0,2,0
+Bourbon,MB Roland,MB Roland Dark Fired,0,2,0
+Bourbon,Redemption,Redemption Wheated,0,2,0
+Tennessee,Jack Daniel's,Old No. 7,80,1,0
+Tennessee,Jack Daniel's,Gentleman Jack,80,2,0
+Tennessee,Jack Daniel's,Single Barrel Sel,100,3,0
+Tennessee,Jack Daniel's,Single Barrel BP,0,3,0
+Tennessee,Jack Daniel's,Sinatra Select,90,4,0
+Tennessee,Jack Daniel's,Tennessee Rye,90,1,0
+Tennessee,Jack Daniel's,Bonded,100,2,0
+Tennessee,George Dickel,Dickel No. 8,80,1,0
+Tennessee,George Dickel,Dickel No. 12,90,1,0
+Tennessee,George Dickel,Dickel BiB,100,2,0
+Tennessee,George Dickel,Dickel Barrel Select,0,2,0
+Tennessee,George Dickel,Dickel Single Barrel,0,3,0
+Tennessee,Uncle Nearest,Uncle Nearest 1856,93,3,0
+Tennessee,Uncle Nearest,Uncle Nearest 1884,93,2,0
+Tennessee,Uncle Nearest,Uncle Nearest SiB,0,3,0
+Tennessee,Uncle Nearest,Uncle Nearest Master,0,4,0
+Tennessee,Nelson's Green Br,Nelson's First 108,108,2,0
+Tennessee,Nelson's Green Br,Nelson's Reserve,0,2,0
+Tennessee,Nelson's Green Br,Nelson's Classic,0,2,0
+Tennessee,Chattanooga,Chattanooga 91,91,2,0
+Tennessee,Chattanooga,Chattanooga 111,111,2,0
+Tennessee,Chattanooga,Chattanooga Cask,0,3,0
+Tennessee,Chattanooga,Chattanooga SiB,0,3,0
+Tennessee,Corsair,Corsair Triple Smoke,0,2,0
+Tennessee,Corsair,Corsair Ryemaggedon,0,2,0
+Tennessee,Popcorn Sutton,Popcorn Sutton SmB,0,2,0
+Tennessee,Popcorn Sutton,Popcorn Sutton SiB,0,3,0
+American Rye,WhistlePig,WhistlePig 6yr,100,3,6
+American Rye,WhistlePig,WhistlePig 10yr,100,3,10
+American Rye,WhistlePig,WhistlePig 12yr,86,4,12
+American Rye,WhistlePig,WhistlePig 15yr,92,4,15
+American Rye,WhistlePig,WhistlePig 18yr,92,4,18
+American Rye,WhistlePig,WhistlePig PiggyBack,96,2,0
+American Rye,WhistlePig,WhistlePig Boss Hog,0,4,0
+American Rye,Sazerac,Sazerac Rye 6yr,90,1,6
+American Rye,Sazerac,Thomas H. Handy,0,4,0
+American Rye,High West,High West Double Rye,92,2,0
+American Rye,High West,High West Rendezvous,92,3,0
+American Rye,High West,High West Bourye,0,3,0
+American Rye,High West,High West Midwinter,0,4,0
+American Rye,Pikesville,Pikesville 110,110,2,0
+American Rye,Rittenhouse,Rittenhouse BiB,100,1,0
+American Rye,Old Overholt,Old Overholt,80,1,0
+American Rye,Old Overholt,Old Overholt BiB,100,1,0
+American Rye,Old Overholt,Old Overholt 114,114,1,0
+American Rye,Sagamore Spirit,Sagamore Signature,83,2,0
+American Rye,Sagamore Spirit,Sagamore Cask Str,0,3,0
+American Rye,Sagamore Spirit,Sagamore Double Oak,83,2,0
+American Rye,Sagamore Spirit,Sagamore Barrel Sel,0,3,0
+American Rye,Templeton,Templeton 4yr,80,2,4
+American Rye,Templeton,Templeton 6yr,91,2,6
+American Rye,Templeton,Templeton 10yr,104,3,10
+American Rye,Templeton,Templeton Barrel Str,0,3,0
+American Rye,FEW Spirits,FEW Straight Rye,93,2,0
+American Rye,FEW Spirits,FEW Single Barrel,0,3,0
+American Rye,Barrell Craft,Barrell Rye,0,3,0
+American Rye,Barrell Craft,Barrell Seagrass,0,3,0
+American Rye,Barrell Craft,Barrell Dovetail,0,3,0
+American Rye,Barrell Craft,Barrell Vantage,0,3,0
+American Rye,Barrell Craft,Barrell Gold Label,0,4,0
+American Rye,Willet,Willet Family Rye,0,4,0
+American Rye,Willet,Willet 4yr Rye,110,3,4
+American Rye,Dad's Hat,Dad's Hat Rye,90,2,0
+American Rye,Dad's Hat,Dad's Hat Vermouth,94,2,0
+American Rye,Lock Stock&Barrel,Lock Stock 13yr,0,4,13
+American Rye,Lock Stock&Barrel,Lock Stock 16yr,0,4,16
+American Rye,Lock Stock&Barrel,Lock Stock 18yr,0,4,18
+American Rye,Lock Stock&Barrel,Lock Stock 20yr,0,4,20
+American Rye,Wild Turkey,Wild Turkey 101 Rye,101,1,0
+American Rye,Wild Turkey,Russell's Res Rye,90,2,0
+American Rye,Woodford Reserve,Woodford Reserve Rye,90,2,0
+American Rye,Bulleit,Bulleit Rye,90,1,0
+American Rye,Angel's Envy,Angel's Envy Rye,100,4,0
+American Rye,Michter's,Michter's US*1 Rye,85,2,0
+American Rye,Knob Creek,Knob Creek Rye 7yr,100,2,7
+American Rye,Knob Creek,Knob Creek SiB Rye,115,3,0
+American Rye,Old Forester,Old Forester Rye,100,1,0
+American Rye,New Riff,New Riff Rye,100,2,0
+American Rye,KY Peerless,Peerless Rye,0,3,0
+American Rye,Rabbit Hole,Boxergrail Rye,95,3,0
+American Rye,Castle & Key,Restoration Rye,0,2,0
+American Rye,Redemption,Redemption High Rye,0,2,0
+American Rye,Redemption,Redemption BP Rye,0,3,0
+American Rye,Wilderness Trail,WT Rye BiB,100,2,0
+American Rye,Town Branch,Town Branch Rye,0,2,0
+American Rye,Frey Ranch,Frey Ranch Rye,90,3,0
+American Rye,Pinhook,Pinhook Rye Humor,0,2,0
+American Rye,Blue Run,Blue Run Golden Rye,0,4,0
+American Rye,Blue Run,Blue Run Emerald Rye,0,4,0
+American Rye,Four Roses,Four Roses SiB Rye,0,3,0
+Scotch Single Malt,Glenfiddich,Glenfiddich 12yr,80,2,12
+Scotch Single Malt,Glenfiddich,Glenfiddich 14yr,86,3,14
+Scotch Single Malt,Glenfiddich,Glenfiddich 15yr,80,3,15
+Scotch Single Malt,Glenfiddich,Glenfiddich 18yr,80,3,18
+Scotch Single Malt,Glenfiddich,Glenfiddich 21yr,80,4,21
+Scotch Single Malt,Glenfiddich,Glenfiddich Fire&Cane,86,3,0
+Scotch Single Malt,Glenfiddich,Glenfiddich IPA Cask,86,2,0
+Scotch Single Malt,The Glenlivet,Glenlivet 12yr,80,2,12
+Scotch Single Malt,The Glenlivet,Glenlivet 14yr,80,2,14
+Scotch Single Malt,The Glenlivet,Glenlivet 15yr,80,3,15
+Scotch Single Malt,The Glenlivet,Glenlivet 18yr,86,3,18
+Scotch Single Malt,The Glenlivet,Glenlivet 21yr,86,4,21
+Scotch Single Malt,The Glenlivet,Glenlivet Nadurra,0,3,0
+Scotch Single Malt,The Glenlivet,Glenlivet Caribbean,80,2,0
+Scotch Single Malt,The Macallan,Macallan 12 Sherry,86,3,12
+Scotch Single Malt,The Macallan,Macallan 12 Dbl Cask,86,3,12
+Scotch Single Malt,The Macallan,Macallan 15 Dbl Cask,86,4,15
+Scotch Single Malt,The Macallan,Macallan 18 Sherry,86,4,18
+Scotch Single Malt,The Macallan,Macallan 18 Dbl Cask,86,4,18
+Scotch Single Malt,The Macallan,Macallan Rare Cask,86,4,0
+Scotch Single Malt,The Macallan,Macallan Classic Cut,0,4,0
+Scotch Single Malt,Balvenie,Balvenie 12 DblWood,86,3,12
+Scotch Single Malt,Balvenie,Balvenie 14 Carib,86,3,14
+Scotch Single Malt,Balvenie,Balvenie 17 DblWood,86,4,17
+Scotch Single Malt,Balvenie,Balvenie 21 PortWood,86,4,21
+Scotch Single Malt,Balvenie,Balvenie 25yr,86,4,25
+Scotch Single Malt,Aberlour,Aberlour 12yr,86,2,12
+Scotch Single Malt,Aberlour,Aberlour 12 NCF,96,3,12
+Scotch Single Malt,Aberlour,Aberlour 16yr,80,3,16
+Scotch Single Malt,Aberlour,Aberlour A'Bunadh,0,3,0
+Scotch Single Malt,Aberlour,Aberlour Casg Annamh,96,3,0
+Scotch Single Malt,Glenfarclas,Glenfarclas 10yr,80,2,10
+Scotch Single Malt,Glenfarclas,Glenfarclas 12yr,86,2,12
+Scotch Single Malt,Glenfarclas,Glenfarclas 15yr,92,3,15
+Scotch Single Malt,Glenfarclas,Glenfarclas 17yr,86,3,17
+Scotch Single Malt,Glenfarclas,Glenfarclas 21yr,86,4,21
+Scotch Single Malt,Glenfarclas,Glenfarclas 25yr,86,4,25
+Scotch Single Malt,Glenfarclas,Glenfarclas 105,120,3,0
+Scotch Single Malt,Glenmorangie,Glenmorangie Original,86,2,10
+Scotch Single Malt,Glenmorangie,Glenmorangie Lasanta,86,3,12
+Scotch Single Malt,Glenmorangie,Glenmorangie Quinta,92,3,14
+Scotch Single Malt,Glenmorangie,Glenmorangie Nectar,92,3,0
+Scotch Single Malt,Glenmorangie,Glenmorangie 18yr,86,3,18
+Scotch Single Malt,Glenmorangie,Glenmorangie Signet,92,4,0
+Scotch Single Malt,Dalmore,Dalmore 12yr,80,3,12
+Scotch Single Malt,Dalmore,Dalmore 15yr,80,3,15
+Scotch Single Malt,Dalmore,Dalmore 18yr,86,4,18
+Scotch Single Malt,Dalmore,Dalmore Cigar Malt,88,4,0
+Scotch Single Malt,Dalmore,Dalmore King Alex,80,4,0
+Scotch Single Malt,Highland Park,Highland Park 12yr,86,3,12
+Scotch Single Malt,Highland Park,Highland Park 15yr,86,3,15
+Scotch Single Malt,Highland Park,Highland Park 18yr,86,4,18
+Scotch Single Malt,Highland Park,Highland Park 25yr,92,4,25
+Scotch Single Malt,Highland Park,Highland Park CS,0,4,0
+Scotch Single Malt,Laphroaig,Laphroaig 10yr,86,2,10
+Scotch Single Malt,Laphroaig,Laphroaig 10 CS,0,3,10
+Scotch Single Malt,Laphroaig,Laphroaig Quarter,96,2,0
+Scotch Single Malt,Laphroaig,Laphroaig Select,80,2,0
+Scotch Single Malt,Laphroaig,Laphroaig Lore,96,3,0
+Scotch Single Malt,Laphroaig,Laphroaig 25yr,97,4,25
+Scotch Single Malt,Ardbeg,Ardbeg 10yr,92,2,10
+Scotch Single Malt,Ardbeg,Ardbeg Uigeadail,108,3,0
+Scotch Single Malt,Ardbeg,Ardbeg Corryvreckan,114,3,0
+Scotch Single Malt,Ardbeg,Ardbeg An Oa,93,3,0
+Scotch Single Malt,Ardbeg,Ardbeg Wee Beastie,94,2,5
+Scotch Single Malt,Lagavulin,Lagavulin 8yr,96,3,8
+Scotch Single Malt,Lagavulin,Lagavulin 16yr,86,3,16
+Scotch Single Malt,Lagavulin,Lagavulin DE,86,3,0
+Scotch Single Malt,Lagavulin,Lagavulin 12 CS,0,4,12
+Scotch Single Malt,Bruichladdich,Bruichladdich Classic,100,3,0
+Scotch Single Malt,Bruichladdich,Port Charlotte 10yr,100,3,10
+Scotch Single Malt,Bruichladdich,Octomore,0,4,0
+Scotch Single Malt,Bowmore,Bowmore 12yr,80,2,12
+Scotch Single Malt,Bowmore,Bowmore 15yr,86,3,15
+Scotch Single Malt,Bowmore,Bowmore 18yr,86,3,18
+Scotch Single Malt,Bowmore,Bowmore 25yr,86,4,25
+Scotch Single Malt,Bowmore,Bowmore No. 1,80,2,0
+Scotch Single Malt,Bunnahabhain,Bunnahabhain 12yr,92,3,12
+Scotch Single Malt,Bunnahabhain,Bunnahabhain 18yr,92,4,18
+Scotch Single Malt,Bunnahabhain,Bunnahabhain 25yr,92,4,25
+Scotch Single Malt,Bunnahabhain,Bunnahabhain Stiuir,92,3,0
+Scotch Single Malt,Bunnahabhain,Bunnahabhain Toiteach,92,3,0
+Scotch Single Malt,Talisker,Talisker 10yr,91,3,10
+Scotch Single Malt,Talisker,Talisker Storm,91,2,0
+Scotch Single Malt,Talisker,Talisker 18yr,91,4,18
+Scotch Single Malt,Talisker,Talisker 25yr,91,4,25
+Scotch Single Malt,Talisker,Talisker DE,91,3,0
+Scotch Single Malt,Talisker,Talisker Port Ruighe,91,3,0
+Scotch Single Malt,Oban,Oban 14yr,86,3,14
+Scotch Single Malt,Oban,Oban Little Bay,86,3,0
+Scotch Single Malt,Oban,Oban 18yr,86,4,18
+Scotch Single Malt,Oban,Oban DE,86,3,0
+Scotch Single Malt,Springbank,Springbank 10yr,92,3,10
+Scotch Single Malt,Springbank,Springbank 12 CS,0,4,12
+Scotch Single Malt,Springbank,Springbank 15yr,92,4,15
+Scotch Single Malt,Springbank,Springbank 18yr,92,4,18
+Scotch Single Malt,Springbank,Springbank 21yr,92,4,21
+Scotch Single Malt,Springbank,Hazelburn 10yr,92,3,10
+Scotch Single Malt,Springbank,Longrow Peated,92,3,0
+Scotch Single Malt,Dalwhinnie,Dalwhinnie 15yr,86,3,15
+Scotch Single Malt,Dalwhinnie,Dalwhinnie DE,86,3,0
+Scotch Single Malt,Dalwhinnie,Dalwhinnie Winter,86,3,0
+Scotch Single Malt,Cragganmore,Cragganmore 12yr,80,2,12
+Scotch Single Malt,Cragganmore,Cragganmore DE,80,3,0
+Scotch Single Malt,Clynelish,Clynelish 14yr,92,3,14
+Scotch Single Malt,Clynelish,Clynelish DE,0,3,0
+Scotch Single Malt,Isle of Jura,Jura 10yr,80,2,10
+Scotch Single Malt,Isle of Jura,Jura 12yr,80,2,12
+Scotch Single Malt,Isle of Jura,Jura 18yr,88,3,18
+Scotch Single Malt,Isle of Jura,Jura Seven Wood,84,3,0
+Scotch Single Malt,Tomatin,Tomatin 12yr,86,2,12
+Scotch Single Malt,Tomatin,Tomatin 14yr Port,92,2,14
+Scotch Single Malt,Tomatin,Tomatin 18yr,92,3,18
+Scotch Single Malt,Tomatin,Tomatin Legacy,86,2,0
+Scotch Single Malt,Tomatin,Tomatin Cu Bocan,92,2,0
+Scotch Single Malt,BenRiach,BenRiach Original,86,2,10
+Scotch Single Malt,BenRiach,BenRiach Smoky 10,92,2,10
+Scotch Single Malt,BenRiach,BenRiach The Twelve,92,3,12
+Scotch Single Malt,BenRiach,BenRiach 21yr,92,4,21
+Scotch Single Malt,BenRiach,BenRiach Curiositas,92,3,0
+Scotch Single Malt,GlenDronach,GlenDronach 12yr,86,3,12
+Scotch Single Malt,GlenDronach,GlenDronach 15yr,92,3,15
+Scotch Single Malt,GlenDronach,GlenDronach 18yr,92,4,18
+Scotch Single Malt,GlenDronach,GlenDronach 21yr,96,4,21
+Scotch Single Malt,GlenDronach,GlenDronach CS,0,4,0
+Scotch Single Malt,Caol Ila,Caol Ila 12yr,86,3,12
+Scotch Single Malt,Caol Ila,Caol Ila 18yr,86,4,18
+Scotch Single Malt,Caol Ila,Caol Ila DE,86,3,0
+Scotch Single Malt,Caol Ila,Caol Ila Moch,86,2,0
+Scotch Single Malt,Glenkinchie,Glenkinchie 12yr,86,2,12
+Scotch Single Malt,Glenkinchie,Glenkinchie DE,86,3,0
+Scotch Single Malt,Auchentoshan,Auchentoshan 12yr,80,2,12
+Scotch Single Malt,Auchentoshan,Auchentoshan ThreeWd,86,2,0
+Scotch Single Malt,Auchentoshan,Auchentoshan American,80,1,0
+Scotch Single Malt,Edradour,Edradour 10yr,80,3,10
+Scotch Single Malt,Edradour,Edradour 12yr CS,0,3,12
+Scotch Single Malt,Edradour,Edradour Caledonia,92,3,0
+Scotch Single Malt,Craigellachie,Craigellachie 13yr,92,3,13
+Scotch Single Malt,Craigellachie,Craigellachie 17yr,92,3,17
+Scotch Single Malt,Craigellachie,Craigellachie 23yr,92,4,23
+Scotch Single Malt,Glen Moray,Glen Moray Classic,80,1,0
+Scotch Single Malt,Glen Moray,Glen Moray 12yr,80,2,12
+Scotch Single Malt,Glen Moray,Glen Moray 15yr,80,2,15
+Scotch Single Malt,Glen Moray,Glen Moray 18yr,94,3,18
+Scotch Single Malt,Glen Moray,Glen Moray Sherry,80,2,0
+Scotch Single Malt,Cardhu,Cardhu 12yr,80,2,12
+Scotch Single Malt,Cardhu,Cardhu Gold Reserve,80,2,0
+Scotch Single Malt,Cardhu,Cardhu 15yr,80,3,15
+Scotch Single Malt,Deanston,Deanston 12yr,92,2,12
+Scotch Single Malt,Deanston,Deanston 18yr,92,3,18
+Scotch Single Malt,Deanston,Deanston Virgin Oak,92,2,0
+Scotch Single Malt,Tobermory,Tobermory 12yr,92,3,12
+Scotch Single Malt,Tobermory,Tobermory 20yr,0,4,20
+Scotch Single Malt,Tobermory,Ledaig 10yr,92,3,10
+Scotch Single Malt,Tobermory,Ledaig 18yr,92,4,18
+Scotch Single Malt,Kilchoman,Kilchoman Machir Bay,92,3,0
+Scotch Single Malt,Kilchoman,Kilchoman Sanaig,92,3,0
+Scotch Single Malt,Kilchoman,Kilchoman 100% Islay,100,3,0
+Scotch Single Malt,Kilchoman,Kilchoman Loch Gorm,92,3,0
+Scotch Single Malt,Old Pulteney,Old Pulteney 12yr,80,2,12
+Scotch Single Malt,Old Pulteney,Old Pulteney 15yr,92,3,15
+Scotch Single Malt,Old Pulteney,Old Pulteney 18yr,92,3,18
+Scotch Single Malt,Old Pulteney,Old Pulteney Huddart,92,2,0
+Scotch Single Malt,Benromach,Benromach 10yr,86,2,10
+Scotch Single Malt,Benromach,Benromach 15yr,86,3,15
+Scotch Single Malt,Benromach,Benromach Peat Smoke,92,3,0
+Scotch Single Malt,Benromach,Benromach CS,0,3,0
+Scotch Single Malt,Mortlach,Mortlach 12yr,86,3,12
+Scotch Single Malt,Mortlach,Mortlach 16yr,86,4,16
+Scotch Single Malt,Mortlach,Mortlach 20yr,86,4,20
+Scotch Single Malt,Glen Scotia,Glen Scotia 15yr,92,3,15
+Scotch Single Malt,Glen Scotia,Glen Scotia 18yr,92,4,18
+Scotch Single Malt,Glen Scotia,Glen Scotia 25yr,92,4,25
+Scotch Single Malt,Glen Scotia,Glen Scotia Victoriana,0,3,0
+Scotch Single Malt,Glen Scotia,Glen Scotia Dbl Cask,92,2,0
+Scotch Single Malt,Tomintoul,Tomintoul 10yr,80,2,10
+Scotch Single Malt,Tomintoul,Tomintoul 14yr,92,2,14
+Scotch Single Malt,Tomintoul,Tomintoul 16yr,80,3,16
+Scotch Single Malt,Tomintoul,Tomintoul Peaty Tang,80,2,0
+Scotch Single Malt,Royal Brackla,Royal Brackla 12yr,80,3,12
+Scotch Single Malt,Royal Brackla,Royal Brackla 16yr,80,3,16
+Scotch Single Malt,Royal Brackla,Royal Brackla 21yr,80,4,21
+Scotch Single Malt,Speyburn,Speyburn 10yr,80,2,10
+Scotch Single Malt,Speyburn,Speyburn 15yr,92,3,15
+Scotch Single Malt,Speyburn,Speyburn 18yr,92,3,18
+Scotch Single Malt,anCnoc,anCnoc 12yr,80,2,12
+Scotch Single Malt,anCnoc,anCnoc 18yr,92,3,18
+Scotch Single Malt,anCnoc,anCnoc 24yr,92,4,24
+Scotch Single Malt,anCnoc,anCnoc Peatheart,0,3,0
+Scotch Single Malt,Balblair,Balblair 12yr,92,3,12
+Scotch Single Malt,Balblair,Balblair 15yr,92,3,15
+Scotch Single Malt,Balblair,Balblair 18yr,92,4,18
+Scotch Single Malt,Balblair,Balblair 25yr,92,4,25
+Scotch Single Malt,Glencadam,Glencadam 10yr,92,2,10
+Scotch Single Malt,Glencadam,Glencadam 13yr,92,3,13
+Scotch Single Malt,Glencadam,Glencadam 15yr,92,3,15
+Scotch Single Malt,Glencadam,Glencadam 21yr,92,4,21
+Scotch Single Malt,Aberfeldy,Aberfeldy 12yr,80,2,12
+Scotch Single Malt,Aberfeldy,Aberfeldy 16yr,80,3,16
+Scotch Single Malt,Aberfeldy,Aberfeldy 21yr,80,4,21
+Scotch Blended,Johnnie Walker,JW Red Label,80,1,0
+Scotch Blended,Johnnie Walker,JW Black Label,80,2,12
+Scotch Blended,Johnnie Walker,JW Double Black,80,2,0
+Scotch Blended,Johnnie Walker,JW Green Label,86,3,15
+Scotch Blended,Johnnie Walker,JW Gold Label Res,80,3,0
+Scotch Blended,Johnnie Walker,JW Blue Label,80,4,0
+Scotch Blended,Johnnie Walker,JW 18yr,80,4,18
+Scotch Blended,Chivas Regal,Chivas 12yr,80,2,12
+Scotch Blended,Chivas Regal,Chivas 18yr,80,3,18
+Scotch Blended,Chivas Regal,Chivas 25yr,80,4,25
+Scotch Blended,Chivas Regal,Chivas XV,80,2,15
+Scotch Blended,Chivas Regal,Chivas Mizunara,80,3,0
+Scotch Blended,Chivas Regal,Chivas Extra 13yr,80,2,13
+Scotch Blended,Dewar's,Dewar's White Label,80,1,0
+Scotch Blended,Dewar's,Dewar's 12yr,80,2,12
+Scotch Blended,Dewar's,Dewar's 15yr,80,2,15
+Scotch Blended,Dewar's,Dewar's 18yr,80,3,18
+Scotch Blended,Dewar's,Dewar's 25yr,80,4,25
+Scotch Blended,Dewar's,Dewar's Caribbean,80,2,0
+Scotch Blended,Monkey Shoulder,Monkey Shoulder,86,2,0
+Scotch Blended,Monkey Shoulder,Smokey Monkey,80,2,0
+Scotch Blended,Compass Box,CB Oak Cross,86,3,0
+Scotch Blended,Compass Box,CB Spice Tree,92,3,0
+Scotch Blended,Compass Box,CB Peat Monster,92,3,0
+Scotch Blended,Compass Box,CB Hedonism,86,4,0
+Scotch Blended,Compass Box,CB Great King,86,2,0
+Scotch Blended,Compass Box,CB Glasgow,80,2,0
+Scotch Blended,Famous Grouse,Famous Grouse,80,1,0
+Scotch Blended,Famous Grouse,Famous Grouse Smoky,80,1,0
+Scotch Blended,Famous Grouse,Naked Malt,80,2,0
+Scotch Blended,Ballantine's,Ballantine's Finest,80,1,0
+Scotch Blended,Ballantine's,Ballantine's 12yr,80,2,12
+Scotch Blended,Ballantine's,Ballantine's 17yr,80,3,17
+Scotch Blended,Ballantine's,Ballantine's 21yr,86,4,21
+Scotch Blended,Cutty Sark,Cutty Sark Original,80,1,0
+Scotch Blended,Cutty Sark,Cutty Sark Prohib,100,2,0
+Scotch Blended,Grant's,Grant's Triple Wood,80,1,0
+Scotch Blended,Grant's,Grant's 12yr,80,2,12
+Scotch Blended,Grant's,Grant's 18yr,80,3,18
+Scotch Blended,Buchanan's,Buchanan's 12yr,80,2,12
+Scotch Blended,Buchanan's,Buchanan's 15yr,80,3,15
+Scotch Blended,Buchanan's,Buchanan's 18yr,80,3,18
+Scotch Blended,Teacher's,Teacher's Highland,80,1,0
+Irish Whiskey,Midleton,Jameson Original,80,1,0
+Irish Whiskey,Midleton,Jameson Black Barrel,80,2,0
+Irish Whiskey,Midleton,Jameson 18yr,80,3,18
+Irish Whiskey,Midleton,Redbreast 12yr,80,3,12
+Irish Whiskey,Midleton,Redbreast 12 CS,0,3,12
+Irish Whiskey,Midleton,Redbreast 15yr,92,4,15
+Irish Whiskey,Midleton,Redbreast 21yr,92,4,21
+Irish Whiskey,Midleton,Redbreast Lustau,92,3,0
+Irish Whiskey,Midleton,Green Spot,80,3,0
+Irish Whiskey,Midleton,Yellow Spot,92,3,12
+Irish Whiskey,Midleton,Blue Spot,0,4,7
+Irish Whiskey,Midleton,Red Spot,0,4,15
+Irish Whiskey,Midleton,Powers Gold Label,86,1,0
+Irish Whiskey,Midleton,Powers John's Lane,92,3,12
+Irish Whiskey,Midleton,Midleton Very Rare,80,4,0
+Irish Whiskey,Midleton,Method & Madness,92,3,0
+Irish Whiskey,Bushmills,Bushmills Original,80,1,0
+Irish Whiskey,Bushmills,Black Bush,80,2,0
+Irish Whiskey,Bushmills,Bushmills 10yr,80,2,10
+Irish Whiskey,Bushmills,Bushmills 12yr,80,2,12
+Irish Whiskey,Bushmills,Bushmills 16yr,80,3,16
+Irish Whiskey,Bushmills,Bushmills 21yr,80,4,21
+Irish Whiskey,Tullamore,Tullamore D.E.W.,80,1,0
+Irish Whiskey,Tullamore,Tullamore 12yr,80,2,12
+Irish Whiskey,Tullamore,Tullamore 14yr SM,82,3,14
+Irish Whiskey,Tullamore,Tullamore 18yr SM,82,4,18
+Irish Whiskey,Tullamore,Tullamore XO,86,2,0
+Irish Whiskey,Teeling,Teeling Small Batch,92,2,0
+Irish Whiskey,Teeling,Teeling Single Grain,92,2,0
+Irish Whiskey,Teeling,Teeling Single Malt,92,3,0
+Irish Whiskey,Teeling,Teeling Single Pot,92,3,0
+Irish Whiskey,Teeling,Teeling Blackpitts,92,3,0
+Irish Whiskey,Dingle,Dingle Single Malt,0,3,0
+Irish Whiskey,Dingle,Dingle Single Pot,0,3,0
+Irish Whiskey,Kilbeggan,Kilbeggan Original,80,1,0
+Irish Whiskey,Kilbeggan,Kilbeggan SiG,86,2,0
+Irish Whiskey,Kilbeggan,Kilbeggan SiM,0,2,0
+Irish Whiskey,Connemara,Connemara Original,80,2,0
+Irish Whiskey,Connemara,Connemara 12yr,80,3,12
+Irish Whiskey,Connemara,Connemara Cask Str,0,3,0
+Irish Whiskey,Connemara,Connemara Turf Mor,92,3,0
+Irish Whiskey,Tyrconnell,Tyrconnell SiM,80,2,0
+Irish Whiskey,Tyrconnell,Tyrconnell 10 Sherry,92,3,10
+Irish Whiskey,Tyrconnell,Tyrconnell 10 Port,92,3,10
+Irish Whiskey,Tyrconnell,Tyrconnell 16yr,92,4,16
+Irish Whiskey,West Cork,West Cork Original,0,1,0
+Irish Whiskey,West Cork,West Cork 8yr,0,2,8
+Irish Whiskey,West Cork,West Cork 10yr,0,2,10
+Irish Whiskey,West Cork,West Cork 12yr,0,2,12
+Irish Whiskey,West Cork,West Cork Bog Oak,0,2,0
+Irish Whiskey,West Cork,West Cork CS,0,2,0
+Irish Whiskey,Glendalough,Glendalough Double,0,2,0
+Irish Whiskey,Glendalough,Glendalough 7yr,0,2,7
+Irish Whiskey,Glendalough,Glendalough 13yr,0,3,13
+Irish Whiskey,Glendalough,Glendalough Pot Stl,0,2,0
+Irish Whiskey,Writers' Tears,Writers' Tears Cppr,80,2,0
+Irish Whiskey,Writers' Tears,Writers' Tears DblOk,80,3,0
+Irish Whiskey,Writers' Tears,Writers' Tears CS,0,3,0
+Irish Whiskey,Proper No. 12,Proper No. Twelve,80,1,0
+Irish Whiskey,Knappogue Castle,Knappogue 12yr,80,2,12
+Irish Whiskey,Knappogue Castle,Knappogue 14yr,92,3,14
+Irish Whiskey,Knappogue Castle,Knappogue 16yr,80,3,16
+Irish Whiskey,Keeper's Heart,Keeper's Heart Irish,0,2,0
+Irish Whiskey,Keeper's Heart,Keeper's Heart Rye,0,2,0
+Japanese Whisky,Yamazaki,Yamazaki 12yr,86,4,12
+Japanese Whisky,Yamazaki,Yamazaki 18yr,86,4,18
+Japanese Whisky,Yamazaki,Yamazaki 25yr,86,4,25
+Japanese Whisky,Yamazaki,Yamazaki Distiller's,86,3,0
+Japanese Whisky,Hakushu,Hakushu 12yr,86,4,12
+Japanese Whisky,Hakushu,Hakushu 18yr,86,4,18
+Japanese Whisky,Hakushu,Hakushu 25yr,86,4,25
+Japanese Whisky,Hakushu,Hakushu Distiller's,86,3,0
+Japanese Whisky,Hibiki,Hibiki Harmony,86,3,0
+Japanese Whisky,Hibiki,Hibiki 17yr,86,4,17
+Japanese Whisky,Hibiki,Hibiki 21yr,86,4,21
+Japanese Whisky,Hibiki,Hibiki 30yr,86,4,30
+Japanese Whisky,Hibiki,Hibiki Blender's Ch,86,4,0
+Japanese Whisky,Suntory Other,Suntory Toki,86,2,0
+Japanese Whisky,Suntory Other,The Chita SiG,86,3,0
+Japanese Whisky,Yoichi,Yoichi Single Malt,90,3,0
+Japanese Whisky,Yoichi,Yoichi 10yr,90,4,10
+Japanese Whisky,Yoichi,Yoichi 15yr,90,4,15
+Japanese Whisky,Miyagikyo,Miyagikyo SiM,90,3,0
+Japanese Whisky,Miyagikyo,Miyagikyo 12yr,90,4,12
+Japanese Whisky,Miyagikyo,Miyagikyo 15yr,90,4,15
+Japanese Whisky,Nikka Blends,Nikka From Barrel,102,3,0
+Japanese Whisky,Nikka Blends,Nikka Coffey Grain,90,3,0
+Japanese Whisky,Nikka Blends,Nikka Coffey Malt,90,3,0
+Japanese Whisky,Nikka Blends,Nikka Taketsuru,86,3,0
+Japanese Whisky,Nikka Blends,Nikka Days,80,2,0
+Japanese Whisky,Nikka Blends,Nikka Session,86,2,0
+Japanese Whisky,Mars Shinshu,Mars Iwai Tradition,80,2,0
+Japanese Whisky,Mars Shinshu,Mars Iwai 45,90,2,0
+Japanese Whisky,Mars Shinshu,Mars Komagatake,0,3,0
+Japanese Whisky,Mars Shinshu,Mars Cosmo,0,2,0
+Japanese Whisky,Chichibu,Ichiro's Malt&Grain,92,3,0
+Japanese Whisky,Chichibu,Ichiro's Malt Double,92,4,0
+Japanese Whisky,Chichibu,Ichiro's Chichibu,0,4,0
+Japanese Whisky,Akkeshi,Akkeshi Peated SiM,0,4,0
+Japanese Whisky,Akkeshi,Akkeshi Blended,0,4,0
+Japanese Whisky,White Oak,Akashi White Oak,80,2,0
+Japanese Whisky,White Oak,Akashi Single Malt,0,3,0
+Japanese Whisky,White Oak,Akashi Sherry Cask,0,3,0
+Japanese Whisky,Kaiyo,Kaiyo Whisky,86,2,0
+Japanese Whisky,Kaiyo,Kaiyo Peated,92,2,0
+Japanese Whisky,Kaiyo,Kaiyo Cask Strength,0,3,0
+Japanese Whisky,Kaiyo,Kaiyo The Single 7yr,96,3,7
+Japanese Whisky,Kurayoshi,Kurayoshi Pure Malt,86,2,0
+Japanese Whisky,Kurayoshi,Kurayoshi 8yr,86,3,8
+Japanese Whisky,Kurayoshi,Kurayoshi 12yr,86,3,12
+Japanese Whisky,Kurayoshi,Kurayoshi 18yr,86,4,18
+Japanese Whisky,Ohishi,Ohishi Sherry Cask,0,3,0
+Japanese Whisky,Ohishi,Ohishi Brandy Cask,0,3,0
+Japanese Whisky,Ohishi,Ohishi Sakura Cask,0,3,0
+Japanese Whisky,Togouchi,Togouchi Premium,80,2,0
+Japanese Whisky,Togouchi,Togouchi 9yr,80,3,9
+Japanese Whisky,Togouchi,Togouchi 15yr,86,3,15
+Japanese Whisky,Togouchi,Togouchi Peated,80,2,0
+Canadian Whisky,Crown Royal,Crown Royal Deluxe,80,1,0
+Canadian Whisky,Crown Royal,Crown Royal Black,90,2,0
+Canadian Whisky,Crown Royal,Crown Royal Res,80,2,0
+Canadian Whisky,Crown Royal,Crown Royal XR,80,4,0
+Canadian Whisky,Crown Royal,Crown Royal XO,80,3,0
+Canadian Whisky,Crown Royal,Crown Royal Northern,90,2,0
+Canadian Whisky,Crown Royal,Crown Royal Peach,70,1,0
+Canadian Whisky,Crown Royal,Crown Royal Apple,70,1,0
+Canadian Whisky,Canadian Club,Canadian Club 1858,80,1,0
+Canadian Whisky,Canadian Club,CC 100% Rye,80,1,0
+Canadian Whisky,Canadian Club,CC 12yr,80,2,12
+Canadian Whisky,Canadian Club,CC 20yr,80,3,20
+Canadian Whisky,Lot No. 40,Lot No. 40,86,2,0
+Canadian Whisky,Lot No. 40,Lot No. 40 CS,0,3,0
+Canadian Whisky,Lot No. 40,Lot No. 40 Dark Oak,86,3,0
+Canadian Whisky,Pike Creek,Pike Creek 10yr,84,2,10
+Canadian Whisky,Pike Creek,Pike Creek 21yr,84,4,21
+Canadian Whisky,JP Wiser's,JP Wiser's Deluxe,80,1,0
+Canadian Whisky,JP Wiser's,JP Wiser's 15yr,80,2,15
+Canadian Whisky,JP Wiser's,JP Wiser's 18yr,80,3,18
+Canadian Whisky,JP Wiser's,JP Wiser's 23yr,80,4,23
+Canadian Whisky,Alberta Premium,Alberta Premium,80,1,0
+Canadian Whisky,Alberta Premium,Alberta Premium CS,0,3,0
+Canadian Whisky,Alberta Premium,Alberta Prem 20yr,0,4,20
+Canadian Whisky,Forty Creek,Forty Creek Barrel,80,1,0
+Canadian Whisky,Forty Creek,Forty Creek Conf Rsv,0,2,0
+Canadian Whisky,Forty Creek,Forty Creek Double,0,2,0
+Canadian Whisky,Pendleton,Pendleton Original,80,1,0
+Canadian Whisky,Pendleton,Pendleton 1910,80,2,12
+Canadian Whisky,Pendleton,Pendleton Midnight,90,2,0
+Canadian Whisky,Collingwood,Collingwood Original,0,2,0
+Canadian Whisky,Collingwood,Collingwood 21yr,0,3,21
+Canadian Whisky,Collingwood,Collingwood Toasted,0,2,0
+Canadian Whisky,Glen Breton,Glen Breton Rare 10,80,3,10
+Canadian Whisky,Glen Breton,Glen Breton Ice 10,80,3,10
+Canadian Whisky,Glen Breton,Glen Breton 14yr,0,3,14
+Canadian Whisky,Glen Breton,Glen Breton 19yr,0,4,19
+Canadian Whisky,Caribou Crossing,Caribou Crossing SiB,80,3,0
+World Whisky,Kavalan,Kavalan Classic,80,3,0
+World Whisky,Kavalan,Kavalan Concertmastr,80,3,0
+World Whisky,Kavalan,Kavalan Ex-Bourbon,92,3,0
+World Whisky,Kavalan,Kavalan Solist Shrry,0,4,0
+World Whisky,Kavalan,Kavalan Solist Brbn,0,4,0
+World Whisky,Amrut,Amrut Single Malt,92,2,0
+World Whisky,Amrut,Amrut Fusion,100,3,0
+World Whisky,Amrut,Amrut Peated,92,3,0
+World Whisky,Amrut,Amrut Cask Strength,0,3,0
+World Whisky,Amrut,Amrut Portonova,124,3,0
+World Whisky,Paul John,Paul John Brilliance,92,2,0
+World Whisky,Paul John,Paul John Edited,92,2,0
+World Whisky,Paul John,Paul John Bold,92,3,0
+World Whisky,Paul John,Paul John Classic,0,2,0
+World Whisky,Paul John,Paul John Peated,110,3,0
+World Whisky,Starward,Starward Nova,82,2,0
+World Whisky,Starward,Starward Solera,86,3,0
+World Whisky,Starward,Starward Two-Fold,80,2,0
+World Whisky,Starward,Starward Fortis,100,3,0
+World Whisky,Starward,Starward Left-Field,80,2,0
+World Whisky,Westward,Westward American SM,90,3,0
+World Whisky,Westward,Westward Stout Cask,90,3,0
+World Whisky,Westward,Westward Pinot Noir,90,3,0
+World Whisky,Westward,Westward Cask Str,0,4,0
+World Whisky,Westland,Westland American SM,92,3,0
+World Whisky,Westland,Westland Sherry Wood,92,3,0
+World Whisky,Westland,Westland Peated,92,3,0
+World Whisky,Westland,Westland Garryana,0,4,0
+World Whisky,Stranahan's,Stranahan's Original,94,3,0
+World Whisky,Stranahan's,Stranahan's Blue Peak,86,2,0
+World Whisky,Stranahan's,Stranahan's Sherry,94,3,0
+World Whisky,Balcones,Balcones Texas SiM,0,3,0
+World Whisky,Balcones,Balcones Baby Blue,92,2,0
+World Whisky,Balcones,Balcones True Blue,0,3,0
+World Whisky,Balcones,Balcones Brimstone,106,3,0
+World Whisky,Balcones,Balcones Lineage,0,2,0
+World Whisky,Virginia Dist Co,Courage & Conviction,92,3,0
+World Whisky,Virginia Dist Co,C&C Cask Strength,0,4,0
+World Whisky,Virginia Dist Co,C&C Sherry Cask,92,3,0
+World Whisky,Virginia Dist Co,C&C Bourbon Cask,92,3,0

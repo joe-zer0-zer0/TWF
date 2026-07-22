@@ -1,7 +1,7 @@
 {
-  "version": "1.3.7",
+  "version": "1.3.8",
   "url": "https://github.com/joe-zer0-zer0/TWF/releases/latest/download/firmware.bin",
-  "notes": "Release 1.3.7",
-  "size": 1284640,
-  "sha256": "3ebdceae570dae51e9b438cb1cbe95e37593995f174e54ab8cdfd9d11b1f9ef5"
+  "notes": "Add OTA force-update for dev iteration",
+  "size": 1284960,
+  "sha256": "5f001861b0e0c88285dee1c27c7d4e14c1b0b6294119b3ef14e9b9166587be71"
 }

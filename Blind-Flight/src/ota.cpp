@@ -79,6 +79,21 @@ static bool jsonExtractUint32(const char* json, const char* key,
     return true;
 }
 
+static bool jsonExtractBool(const char* json, const char* key, bool& out) {
+    char needle[64];
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+
+    const char* pos = strstr(json, needle);
+    if (!pos) return false;
+
+    pos += strlen(needle);
+    while (*pos == ' ' || *pos == ':') pos++;
+
+    if (strncmp(pos, "true", 4) == 0)       { out = true;  return true; }
+    if (strncmp(pos, "false", 5) == 0)       { out = false; return true; }
+    return false;
+}
+
 // ============================================================
 // Manifest fetch + version check
 // ============================================================
@@ -128,10 +143,20 @@ bool otaCheckForUpdate(const char* manifestUrl, OtaUpdateInfo& info,
     jsonExtractUint32(json, "size", info.size);
     jsonExtractString(json, "sha256", info.sha256, sizeof(info.sha256));
 
-    info.available = (compareVersions(FW_VERSION, info.version) < 0);
+    // "force": true in the manifest bypasses version comparison —
+    // used during dev iteration to avoid burning version numbers.
+    bool forceUpdate = false;
+    jsonExtractBool(json, "force", forceUpdate);
 
-    Serial.printf("[OTA] Current: v%s, Remote: v%s, Update: %s\n",
+    if (forceUpdate) {
+        info.available = true;
+    } else {
+        info.available = (compareVersions(FW_VERSION, info.version) < 0);
+    }
+
+    Serial.printf("[OTA] Current: v%s, Remote: v%s, Force: %s, Update: %s\n",
                   FW_VERSION, info.version,
+                  forceUpdate ? "yes" : "no",
                   info.available ? "available" : "up to date");
 
     return true;
