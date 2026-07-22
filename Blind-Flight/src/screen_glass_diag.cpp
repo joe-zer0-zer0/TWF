@@ -31,7 +31,8 @@
 // ============================================================
 
 #define DIAG_NUDGE_STEPS  10  // microsteps per encoder click (~2.25°), matches calibrate
-#define NUDGE_KICKSTART    4  // extra fast steps to break static friction before measured steps
+#define NUDGE_KICKSTART    8  // extra fast steps to break static friction before measured steps
+#define NUDGE_SPEED       600 // microsteps/sec for nudge moves (above loaded resonance zone)
 
 enum DiagState {
     DIAG_HOMING,
@@ -183,13 +184,11 @@ static void serialDumpResults() {
 static void nudgeDisc(bool clockwise, int steps) {
     motorEnable();
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
-    delayMicroseconds(50);   // longer DIR settle for reliable direction changes
+    delayMicroseconds(50);
 
-    // Kickstart burst at higher speed to break static friction,
-    // then the measured steps at homing speed
     int kickSteps = NUDGE_KICKSTART;
-    unsigned long kickDelay = 1000000UL / (HOMING_SPEED * 3);  // 3× homing speed
-    unsigned long normalDelay = 1000000UL / HOMING_SPEED;
+    unsigned long kickDelay = 1000000UL / (NUDGE_SPEED * 2);   // 2× nudge speed for kickstart
+    unsigned long normalDelay = 1000000UL / NUDGE_SPEED;
 
     for (int i = 0; i < kickSteps + steps; i++) {
         digitalWrite(PIN_MOTOR_STEP, HIGH);
@@ -201,18 +200,21 @@ static void nudgeDisc(bool clockwise, int steps) {
 
 static void undoNudgeRaw() {
     if (diagNudge == 0) return;
-    // Move exactly abs(diagNudge) steps in the reverse direction — no kickstart
     bool clockwise = (diagNudge < 0);
     int steps = abs(diagNudge);
     motorEnable();
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
     delayMicroseconds(50);
-    unsigned long normalDelay = 1000000UL / HOMING_SPEED;
-    for (int i = 0; i < steps; i++) {
+
+    int kickSteps = NUDGE_KICKSTART;
+    unsigned long kickDelay = 1000000UL / (NUDGE_SPEED * 2);
+    unsigned long normalDelay = 1000000UL / NUDGE_SPEED;
+
+    for (int i = 0; i < kickSteps + steps; i++) {
         digitalWrite(PIN_MOTOR_STEP, HIGH);
         delayMicroseconds(5);
         digitalWrite(PIN_MOTOR_STEP, LOW);
-        delayMicroseconds(normalDelay);
+        delayMicroseconds(i < kickSteps ? kickDelay : normalDelay);
     }
 }
 

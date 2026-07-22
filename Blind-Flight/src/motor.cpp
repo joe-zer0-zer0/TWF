@@ -71,6 +71,10 @@ static int moveSteps(int steps, bool clockwise, int maxSpeed) {
     if (accelSteps + decelSteps > steps) {
         accelSteps = steps / 2;
         decelSteps = steps - accelSteps;
+        // Cap peak speed so actual acceleration stays at MOTOR_ACCEL
+        float cappedMax = sqrtf((float)MOTOR_MIN_SPEED * MOTOR_MIN_SPEED +
+                                2.0f * MOTOR_ACCEL * accelSteps);
+        if (cappedMax < maxSpeed) maxSpeed = (int)cappedMax;
     }
 
     int cruiseSteps = steps - accelSteps - decelSteps;
@@ -96,8 +100,6 @@ static int moveSteps(int steps, bool clockwise, int maxSpeed) {
         unsigned long stepDelay = (unsigned long)(1000000.0f / currentSpeed);
         delayMicroseconds(stepDelay);
 
-        // Yield to RTOS every 256 steps to prevent task watchdog
-        // starvation on long moves (multi-revolution spins).
         if ((i & 0xFF) == 0) yield();
     }
 
@@ -155,6 +157,9 @@ static int moveStepsVerified(int steps, bool clockwise, int maxSpeed, int startP
     if (accelSteps + decelSteps > steps) {
         accelSteps = steps / 2;
         decelSteps = steps - accelSteps;
+        float cappedMax = sqrtf((float)MOTOR_MIN_SPEED * MOTOR_MIN_SPEED +
+                                2.0f * MOTOR_ACCEL * accelSteps);
+        if (cappedMax < maxSpeed) maxSpeed = (int)cappedMax;
     }
 
     int cruiseSteps = steps - accelSteps - decelSteps;
@@ -190,8 +195,6 @@ static int moveStepsVerified(int steps, bool clockwise, int maxSpeed, int startP
         unsigned long stepDelay = (unsigned long)(1000000.0f / currentSpeed);
         delayMicroseconds(stepDelay);
 
-        // Yield to RTOS every 256 steps to prevent task watchdog
-        // starvation on long moves (multi-revolution spins).
         if ((i & 0xFF) == 0) yield();
     }
 
