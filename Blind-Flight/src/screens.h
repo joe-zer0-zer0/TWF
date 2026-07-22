@@ -32,6 +32,9 @@ extern const Screen screenCalibrate;
 // Favorites management screen (Settings sub-screen)
 extern const Screen screenFavorites;
 
+// Per-glass alignment diagnostic (measures offset at each position)
+extern const Screen screenGlassDiag;
+
 // Diagnostics screen (hidden — long-press encoder on About)
 extern const Screen screenDiagnostics;
 

@@ -32,9 +32,10 @@ enum SettingsItem {
     SET_CALIBRATE,
     SET_REHOME,
     SET_MOTORTEST,
+    SET_GLASSDIAG,
     SET_ABOUT,
     SET_UPDATE,
-    SET_COUNT       // 16
+    SET_COUNT       // 17
 };
 
 // How many items fit in the content area
@@ -110,6 +111,7 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
         case SET_CALIBRATE: label = "Calibrate"; break;
         case SET_REHOME:    label = "Re-Home";   break;
         case SET_MOTORTEST: label = "Motor Test"; break;
+        case SET_GLASSDIAG: label = "Glass Diag"; break;
         case SET_ABOUT:     label = "About";     break;
         case SET_UPDATE:    label = "Update";    break;
     }
@@ -230,6 +232,7 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
         }
         case SET_REHOME:
         case SET_MOTORTEST:
+        case SET_GLASSDIAG:
         case SET_ABOUT:
             // No value — action items
             tft->setTextColor(COL_DIM, bgCol);
@@ -584,6 +587,10 @@ static void settingsInput(InputEvent evt) {
                 audioPlayTone(TONE_SELECT);
                 extern const Screen screenMotorTest;
                 uiPushScreenT(&screenMotorTest, TRANS_WIPE_LEFT);
+            } else if (setSelected == SET_GLASSDIAG) {
+                audioPlayTone(TONE_SELECT);
+                extern const Screen screenGlassDiag;
+                uiPushScreenT(&screenGlassDiag, TRANS_WIPE_LEFT);
             } else if (setSelected == SET_UPDATE) {
                 if (wifiIsSTAMode()) {
                     audioPlayTone(TONE_SELECT);
