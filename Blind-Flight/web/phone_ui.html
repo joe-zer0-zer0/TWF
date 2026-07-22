@@ -94,23 +94,31 @@ margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;alig
 <div class="card" id="v" style="display:none"></div>
 <div class="card" id="wc" style="display:none"></div>
 <div class="card" id="fc" style="display:none"></div>
+<div class="card" id="sc" style="display:none"></div>
 <script>
 var S=null,ws=null,lk=false,F=null,fOpen=false;
 var H=null,HY=null,HR=null,HJ=false,HN='';
 var hg0=-1,hg1=-1,hClaim=0;
 var wOpen=false,wNets=null,wSel='',wSta=false,wMsg='';
-var authed=false;
+var authed=false,pendPin='';
 var h2hSetup=null;
+var SET=null,sOpen=false;
+var gpMode=null,gpGc=0;
 function doAuth(){
 var p=$('pp');if(!p)return;
 var v=p.value.trim();if(v.length!==4){$('pe').textContent='Enter 4 digits';$('pe').style.display='';return;}
+pendPin=v;
 if(ws&&ws.readyState===1)ws.send(JSON.stringify({a:'auth',v:v}));
 }
 function cn(){
 ws=new WebSocket('ws://'+location.hostname+':81/');
 ws.onopen=function(){
 $('cd').className='cdot con';$('cs').textContent='Connected';
-if(!authed){$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
+if(!authed){
+var cp=localStorage.getItem('bf_pin');
+if(cp&&cp.length===4){pendPin=cp;ws.send(JSON.stringify({a:'auth',v:cp}));}
+else{$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
+}
 };
 ws.onclose=function(){
 $('cd').className='cdot coff';$('cs').textContent='Reconnecting...';
@@ -124,11 +132,15 @@ if(d.t==='auth_required'){
 if(!authed){$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
 return;}
 if(d.t==='auth'){
-if(d.ok){authed=true;$('pa').style.display='none';$('v').style.display='';
-lk=false;tx({a:'fav_list'});}
-else{$('pe').textContent='Wrong PIN';$('pe').style.display='';$('pp').value='';$('pp').focus();}
+if(d.ok){authed=true;if(pendPin)localStorage.setItem('bf_pin',pendPin);pendPin='';
+$('pa').style.display='none';$('v').style.display='';
+lk=false;tx({a:'fav_list'});txf({a:'settings_get'});}
+else{localStorage.removeItem('bf_pin');pendPin='';
+$('pa').style.display='';$('v').style.display='none';
+$('pe').textContent='Wrong PIN';$('pe').style.display='';$('pp').value='';$('pp').focus();}
 return;}
 if(d.t==='favs'){F=d;lk=false;rfav();return;}
+if(d.t==='settings'){SET=d;lk=false;rset();return;}
 if(d.t==='h2h'){H=d;lk=false;rh();return;}
 if(d.t==='h2h_you'){HY=d;lk=false;rh();return;}
 if(d.t==='h2h_result'){HR=d;lk=false;rh();return;}
@@ -138,7 +150,7 @@ if(d.t==='wifi_status'){lk=false;
 if(d.ok){wMsg='Connected! IP: '+d.ip;wSta=true;}
 else{wMsg='Connection failed';}
 rwifi();return;}
-S=d;lk=false;rn();showFavCard();showWifiCard();
+S=d;lk=false;rn();showFavCard();showWifiCard();showSetCard();
 }catch(x){}
 };
 }
@@ -162,14 +174,15 @@ v.innerHTML='<div class="st">Spinning...</div>'+
 return;
 }
 if(!S.a){
+if(gpMode){rgpick();return;}
 if(h2hSetup){rh2hSetup();return;}
 v.innerHTML='<div class="st">Ready</div>'+
 '<div class="msg">Start a flight</div>'+
-'<button class="btn bp" onclick="tx({a:\'start\',v:\'B\'})">Basic Flight</button>'+
-'<button class="btn bp" onclick="tx({a:\'start\',v:\'N\'})">Named Flight</button>'+
-'<button class="btn bp" onclick="tx({a:\'start\',v:\'G\'})">Best Guess</button>'+
-'<button class="btn bp" onclick="tx({a:\'start\',v:\'R\'})">Ranked Flight</button>'+
-'<button class="btn bp" onclick="tx({a:\'start\',v:\'Q\'})">Guess + Ranked</button>'+
+'<button class="btn bp" onclick="gpick(\'B\')">Basic Flight</button>'+
+'<button class="btn bp" onclick="gpick(\'N\')">Named Flight</button>'+
+'<button class="btn bp" onclick="gpick(\'G\')">Best Guess</button>'+
+'<button class="btn bp" onclick="gpick(\'R\')">Ranked Flight</button>'+
+'<button class="btn bp" onclick="gpick(\'Q\')">Guess + Ranked</button>'+
 '<hr class="sep"><div class="slbl">Challenge Modes</div>'+
 '<button class="btn bp" onclick="tx({a:\'start\',v:\'D\'})">Twin Pour (Duplicate)</button>'+
 '<button class="btn bp" onclick="tx({a:\'start\',v:\'Y\'})">Find the Ringer (Decoy)</button>'+
@@ -184,6 +197,7 @@ h+='<div class="st">Pour '+(S.p+1)+'</div>';
 h+='<input type="text" id="ni" placeholder="Enter whiskey name" maxlength="21" autocomplete="off" autocapitalize="words">';
 h+='<button class="btn bp" onclick="sn()">Submit Name</button>';
 if(S.p>0)h+='<button class="btn bs" onclick="tx({a:\'left\'})">Skip — End Flight</button>';
+else h+='<button class="btn bd" onclick="tx({a:\'left\'})">Cancel</button>';
 h+='<div class="hint">Type a name and tap Submit</div>';
 }else if(s==='BS'){
 var bc=S.bc||0,bt=S.bt||3;
@@ -196,6 +210,7 @@ h+='<div class="fi"><span>'+esc(S.bn[i])+'</span></div>';
 }
 h+='<input type="text" id="bi" placeholder="Enter bottle name" maxlength="21" autocomplete="off" autocapitalize="words">';
 h+='<button class="btn bp" onclick="sb()">Add Bottle</button>';
+h+='<button class="btn bs" onclick="tx({a:\'left\'})">Back</button>';
 h+='<div class="hint">'+(m==='D'?'3 bottles needed — one will be poured twice':'2 bottles needed — one will be the ringer')+'</div>';
 }else if(s==='PO'){
 h+='<div class="st">Pour '+(S.p+1)+'</div>';
@@ -245,8 +260,9 @@ h+='<button class="btn bp" onclick="tx({a:\'right\'})">Reveal</button></div>';
 var cn2=S.cn2||1,cc=S.cc||0,cs=S.cs||[];
 h+='<div class="st">'+(m==='D'?'Find the Twins':'Find the Ringer')+'</div>';
 h+='<div class="msg">Select '+(cn2===2?'the 2 matching glasses':'the odd one out')+'</div>';
+var cn3=S.n||4;
 h+='<div class="glasses">';
-for(var i=1;i<=4;i++){
+for(var i=1;i<=cn3;i++){
 var sel=false;
 for(var j=0;j<cs.length;j++){if(cs[j]===i)sel=true;}
 h+='<div class="gb '+(sel?'gs2':'gu')+'" style="cursor:pointer" onclick="csel('+i+')">'+i+'</div>';
@@ -281,13 +297,13 @@ function sn(){var ni=$('ni');if(ni&&ni.value.trim())tx({a:'name',v:ni.value.trim
 function sb(){var bi=$('bi');if(bi&&bi.value.trim())tx({a:'bottle',v:bi.value.trim()});}
 function csel(g){txf({a:'csel',v:g});}
 function gl(){
-var h='<div class="glasses">';
-for(var i=0;i<4;i++)h+='<div class="gb '+(S.u[i]?'gu':'ge')+'">'+(i+1)+'</div>';
+var h='<div class="glasses">';var n=S.n||4;
+for(var i=0;i<n;i++)h+='<div class="gb '+(S.u[i]?'gu':'ge')+'">'+(i+1)+'</div>';
 return h+'</div>';
 }
 function gd(){
-var h='<div class="glasses">';
-for(var i=0;i<4;i++){
+var h='<div class="glasses">';var n=S.n||4;
+for(var i=0;i<n;i++){
 if(S.u[i]){
 var ok=S.gx&&S.gx[i]!==undefined?S.gx[i]:false;
 h+='<div class="gb gu">'+(i+1)+'<span class="chk '+(ok?'cok':'cnk')+'">'+(ok?'✓':'✗')+'</span></div>';
@@ -396,17 +412,36 @@ h2hSetup.step='lobby';
 rn();
 }
 
+function gpick(m){gpMode=m;gpGc=SET&&SET.gc?SET.gc:S&&S.n?S.n:4;rn();}
+function rgpick(){
+var v=$('v');
+var h='<div class="st">Glass Count</div>';
+h+='<div class="msg">How many glasses?</div>';
+h+='<div class="gsel">';
+for(var g=2;g<=4;g++)
+h+='<div class="gbtn'+(g===gpGc?' active':'')+'" onclick="gpGc='+g+';rn()">'+g+'</div>';
+h+='</div>';
+h+='<button class="btn bp" onclick="ggo()">Start</button>';
+h+='<button class="btn bs" onclick="gpMode=null;gpGc=0;rn()">Cancel</button>';
+v.innerHTML=h;
+$('fc').style.display='none';$('wc').style.display='none';$('sc').style.display='none';
+}
+function ggo(){
+var m=gpMode;var c=gpGc||4;gpMode=null;gpGc=0;
+tx({a:'start',v:m,gc:c});
+}
+
 function showFavCard(){
 var fc=$('fc');
 if(!S||S.a){fc.style.display='none';return;}
-if(h2hSetup){fc.style.display='none';return;}
+if(h2hSetup||gpMode){fc.style.display='none';return;}
 fc.style.display='';
 }
 function showWifiCard(){
 var wc=$('wc');
 if(!wc)return;
 if(!S||S.a||S.sta){wc.style.display='none';return;}
-if(h2hSetup){wc.style.display='none';return;}
+if(h2hSetup||gpMode){wc.style.display='none';return;}
 wc.style.display='';
 rwifi();
 }
@@ -473,6 +508,38 @@ var wp=$('wp');
 var p=wp?wp.value:'';
 wMsg='Connecting...';rwifi();
 tx({a:'wifi_connect',s:wSel,p:p});
+}
+function showSetCard(){
+var sc=$('sc');
+if(!S||S.a){sc.style.display='none';return;}
+if(h2hSetup||gpMode){sc.style.display='none';return;}
+sc.style.display='';
+rset();
+}
+function rset(){
+var sc=$('sc');
+if(!SET){sc.innerHTML='';return;}
+var h='<div class="fhdr" onclick="sOpen=!sOpen;rset()"><div class="st" style="margin:0">Settings</div><span>'+(sOpen?'▲':'▼')+'</span></div>';
+if(sOpen){
+h+=sr('Glass Count',['2','3','4'],SET.gc-2,'gc',2);
+h+=sr('Pour Side',['Front','Right','Rear','Left'],SET.pour,'pour');
+h+=sr('Spin Speed',['Fast','Normal','Theatr.'],SET.spd,'spd');
+h+=sr('Sound',['Off','On'],SET.snd?1:0,'snd');
+if(SET.snd)h+=sr('Volume',['0','1','2','3','4'],SET.vol,'vol');
+h+=sr('Brightness',['1','2','3','4','5'],SET.brt,'brt');
+}
+sc.innerHTML=h;
+}
+function sr(lbl,opts,sel,key,off){
+off=off||0;
+var h='<div style="margin:8px 0"><div style="font-size:13px;color:#888;margin-bottom:4px">'+lbl+'</div><div class="gsel">';
+for(var i=0;i<opts.length;i++){
+h+='<div class="gbtn'+(i===sel?' active':'')+'" onclick="ss(\''+key+'\','+(i+off)+')">'+opts[i]+'</div>';
+}
+return h+'</div></div>';
+}
+function ss(k,v){
+txf({a:'settings_set',k:k,v:v});
 }
 function rh(){
 var v=$('v');

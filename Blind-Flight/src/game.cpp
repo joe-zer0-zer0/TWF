@@ -63,6 +63,7 @@ static bool phoneNameReady    = false;
 static int  phonePendingGuess = -1;
 static bool phonePendingStart = false;
 static GameMode phoneStartMode = GAME_MODE_BASIC;
+static int phoneStartGC = 0;
 static bool pendingResumePour = false;
 static bool homedThisFlight  = false;
 
@@ -1246,15 +1247,27 @@ static void gameDraw(bool fullRedraw) {
 #endif
 
         if (modeUsesNames()) {
-            Serial.printf("[Game] Phone starting %s\n",
-                          currentMode == GAME_MODE_GUESS ? "Best Guess" :
-                          currentMode == GAME_MODE_RANK  ? "Ranked Flight" : "Named Flight");
             resetSession();
+            if (phoneStartGC >= 2 && phoneStartGC <= 4) {
+                session.glassCount = phoneStartGC;
+                settingsSetGlassCount(phoneStartGC);
+                settingsSave();
+            }
+            phoneStartGC = 0;
+            Serial.printf("[Game] Phone starting %s (%d glasses)\n",
+                          getModeTitleText(), session.glassCount);
             state = GAME_NAMING;
             uiRequestRedraw();
         } else {
-            Serial.println("[Game] Phone starting Basic Flight");
             resetSession();
+            if (phoneStartGC >= 2 && phoneStartGC <= 4) {
+                session.glassCount = phoneStartGC;
+                settingsSetGlassCount(phoneStartGC);
+                settingsSave();
+            }
+            phoneStartGC = 0;
+            Serial.printf("[Game] Phone starting Basic Flight (%d glasses)\n",
+                          session.glassCount);
             runPourCycle();
         }
         return;
@@ -1442,6 +1455,19 @@ static void gameInput(InputEvent evt) {
             break;
 
         case GAME_NAMING:
+            if (evt == INPUT_BTN_LEFT) {
+                audioPlayTone(TONE_SELECT);
+                if (session.pourCount > 0) {
+                    Serial.printf("[Game] Skip naming — %d poured\n",
+                                  session.pourCount);
+                    runFinalSpin();
+                } else {
+                    Serial.println("[Game] Cancel — no pours, aborting");
+                    persistClearSession();
+                    gameActive = false;
+                    uiPopScreenT(TRANS_FADE);
+                }
+            }
             break;
 
         case GAME_BOTTLE_SELECT:
@@ -1464,8 +1490,33 @@ static void gameInput(InputEvent evt) {
             break;
 #else
         case GAME_COUNT_SELECT:
+            break;
         case GAME_NAMING:
+            if (evt == INPUT_BTN_LEFT) {
+                audioPlayTone(TONE_SELECT);
+                if (session.pourCount > 0) {
+                    Serial.printf("[Game] Skip naming — %d poured\n",
+                                  session.pourCount);
+                    runFinalSpin();
+                } else {
+                    Serial.println("[Game] Cancel — no pours, aborting");
+                    persistClearSession();
+                    gameActive = false;
+                }
+            }
+            break;
         case GAME_BOTTLE_SELECT:
+            if (evt == INPUT_BTN_LEFT) {
+                audioPlayTone(TONE_SELECT);
+                if (session.bottleCount > 0) {
+                    session.bottleCount--;
+                    session.bottleName[session.bottleCount][0] = '\0';
+                    uiRequestRedraw();
+                } else {
+                    persistClearSession();
+                    gameActive = false;
+                }
+            }
             break;
 #endif
 
@@ -2037,7 +2088,7 @@ void gamePhoneGuessSelect(int poolIndex) {
     uiRequestRedraw();
 }
 
-void gameStartFromPhone(GameMode mode) {
+void gameStartFromPhone(GameMode mode, int glassCount) {
     if (gameActive) return;
 
     gameSetMode(mode);
@@ -2049,8 +2100,14 @@ void gameStartFromPhone(GameMode mode) {
         awaitingBrowseReturn = false;
 #endif
         resetSession();
+        if (glassCount >= 2 && glassCount <= 4) {
+            session.glassCount = glassCount;
+            settingsSetGlassCount(glassCount);
+            settingsSave();
+        }
         state = GAME_NAMING;
-        Serial.printf("[Game] Phone starting %s\n", getModeTitleText());
+        Serial.printf("[Game] Phone starting %s (%d glasses)\n",
+                      getModeTitleText(), session.glassCount);
         uiPushScreenT(&screenGame, TRANS_FADE);
     } else if (modeIsChallenge()) {
         gameActive = true;
@@ -2065,6 +2122,7 @@ void gameStartFromPhone(GameMode mode) {
         uiPushScreenT(&screenGame, TRANS_FADE);
     } else {
         phoneStartMode = mode;
+        phoneStartGC = glassCount;
         phonePendingStart = true;
         uiPushScreenT(&screenGame, TRANS_FADE);
     }

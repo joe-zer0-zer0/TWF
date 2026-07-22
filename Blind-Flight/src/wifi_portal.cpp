@@ -5,9 +5,10 @@
 #include "input.h"
 #include "favorites.h"
 #include "device_id.h"
+#include "settings.h"
+#include "transitions.h"
 #ifndef HEADLESS_BUILD
 #include "screens.h"
-#include "transitions.h"
 #endif
 
 #include <WiFi.h>
@@ -185,8 +186,16 @@ static void generateAPPassword() {
 }
 
 static void generatePIN() {
-    uint32_t r = esp_random();
-    snprintf(wsPIN, sizeof(wsPIN), "%04u", r % 10000);
+    uint64_t mac = deviceGetMAC();
+    uint8_t* m = (uint8_t*)&mac;
+
+    uint32_t seed = m[0] | (m[1] << 8) | (m[2] << 16) | (m[3] << 24);
+    seed ^= m[4] | (m[5] << 8);
+    seed ^= 0xBF42CA57;  // different constant than AP password
+
+    seed = seed * 1103515245 + 12345;
+    uint32_t pin = (seed >> 16) % 10000;
+    snprintf(wsPIN, sizeof(wsPIN), "%04u", pin);
     Serial.printf("[WiFi] WebSocket PIN: %s\n", wsPIN);
 }
 
@@ -735,8 +744,9 @@ static int buildStateJSON(char* buf, int bufLen) {
     bool active = gameIsActive();
 
     if (!active) {
-        return snprintf(buf, bufLen, "{\"a\":false,\"sta\":%s,\"serial\":\"%s\"}",
-                        staMode ? "true" : "false", deviceGetSerial());
+        return snprintf(buf, bufLen, "{\"a\":false,\"sta\":%s,\"serial\":\"%s\",\"n\":%d}",
+                        staMode ? "true" : "false", deviceGetSerial(),
+                        settingsGetGlassCount());
     }
 
     GameState gs = gameGetState();
@@ -782,11 +792,16 @@ static int buildStateJSON(char* buf, int bufLen) {
         pos += snprintf(buf + pos, JSON_REM, ",\"sp\":true");
     }
 
-    pos += snprintf(buf + pos, JSON_REM, ",\"u\":[%s,%s,%s,%s]",
-        gameGetGlassUsed(0) ? "true" : "false",
-        gameGetGlassUsed(1) ? "true" : "false",
-        gameGetGlassUsed(2) ? "true" : "false",
-        gameGetGlassUsed(3) ? "true" : "false");
+    int gc = gameGetGlassCount();
+    pos += snprintf(buf + pos, JSON_REM, ",\"n\":%d", gc);
+
+    pos += snprintf(buf + pos, JSON_REM, ",\"u\":[");
+    for (int i = 0; i < gc; i++) {
+        if (i > 0) JSON_PUT(',');
+        pos += snprintf(buf + pos, JSON_REM, "%s",
+            gameGetGlassUsed(i) ? "true" : "false");
+    }
+    JSON_PUT(']');
 
     if (gs == GAME_POURING) {
         const char* cn = gameGetGlassName(pc);
@@ -1027,6 +1042,34 @@ static void broadcastFavoritesJSON() {
     }
     pos += snprintf(json + pos, sizeof(json) - pos, "]}");
     json[pos] = '\0';
+    wsServer.broadcastTXT(json);
+}
+
+// ============================================================
+// Settings JSON
+// ============================================================
+
+static void sendSettingsJSON(uint8_t clientNum) {
+    char json[128];
+    snprintf(json, sizeof(json),
+        "{\"t\":\"settings\",\"gc\":%d,\"pour\":%d,\"spd\":%d,"
+        "\"snd\":%s,\"vol\":%d,\"brt\":%d}",
+        settingsGetGlassCount(), settingsGetPourSide(),
+        settingsGetSpinSpeed(),
+        settingsGetSoundOn() ? "true" : "false",
+        settingsGetVolume(), settingsGetBrightness());
+    wsServer.sendTXT(clientNum, json);
+}
+
+static void broadcastSettingsJSON() {
+    char json[128];
+    snprintf(json, sizeof(json),
+        "{\"t\":\"settings\",\"gc\":%d,\"pour\":%d,\"spd\":%d,"
+        "\"snd\":%s,\"vol\":%d,\"brt\":%d}",
+        settingsGetGlassCount(), settingsGetPourSide(),
+        settingsGetSpinSpeed(),
+        settingsGetSoundOn() ? "true" : "false",
+        settingsGetVolume(), settingsGetBrightness());
     wsServer.broadcastTXT(json);
 }
 
@@ -1386,8 +1429,14 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
             case 'D': mode = GAME_MODE_DUPLICATE;   break;
             case 'Y': mode = GAME_MODE_DECOY;       break;
         }
-        Serial.printf("[WiFi] Phone start: mode %d\n", (int)mode);
-        gameStartFromPhone(mode);
+        int gc = 0;
+        char* gcPtr = strstr(msg, "\"gc\":");
+        if (gcPtr) {
+            gc = atoi(gcPtr + 5);
+            if (gc < 2 || gc > 4) gc = 0;
+        }
+        Serial.printf("[WiFi] Phone start: mode %d, gc %d\n", (int)mode, gc);
+        gameStartFromPhone(mode, gc);
         return;
     }
 
@@ -1458,6 +1507,41 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
         Serial.printf("[WiFi] Phone fav_del: %d\n", idx);
         favoritesRemove(idx);
         broadcastFavoritesJSON();
+        return;
+    }
+
+    // --- Settings ---
+    if (action == "settings_get") {
+        sendSettingsJSON(clientNum);
+        return;
+    }
+    if (action == "settings_set") {
+        char* kPtr = strstr(msg, "\"k\":\"");
+        if (!kPtr) return;
+        kPtr += 5;
+        char* kEnd = strchr(kPtr, '"');
+        if (!kEnd) return;
+        *kEnd = '\0';
+        String key(kPtr);
+
+        char* vvPtr = strstr(kEnd + 1, "\"v\":");
+        if (!vvPtr) return;
+        int val = atoi(vvPtr + 4);
+
+        if (key == "gc")        settingsSetGlassCount(val);
+        else if (key == "pour") settingsSetPourSide(val);
+        else if (key == "spd")  settingsSetSpinSpeed(val);
+        else if (key == "snd")  settingsSetSoundOn(val != 0);
+        else if (key == "vol")  settingsSetVolume(val);
+        else if (key == "brt") {
+            settingsSetBrightness(val);
+            setBacklight(BRIGHT_MAP[settingsGetBrightness()]);
+        }
+        else return;
+
+        settingsSave();
+        Serial.printf("[WiFi] Settings set: %s = %d\n", key.c_str(), val);
+        broadcastSettingsJSON();
         return;
     }
 

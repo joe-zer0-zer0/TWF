@@ -174,7 +174,7 @@ const char* gameGetChallengePourBottle();        // bottle name for current pour
 
 void gamePhoneSubmitName(const char* name);
 void gamePhoneGuessSelect(int poolIndex);
-void gameStartFromPhone(GameMode mode);
+void gameStartFromPhone(GameMode mode, int glassCount = 0);
 
 // Ranking: select a glass by pool index for current rank
 void gamePhoneRankSelect(int poolIndex);
