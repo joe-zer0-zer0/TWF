@@ -31,8 +31,7 @@
 // ============================================================
 
 #define DIAG_NUDGE_STEPS  10  // microsteps per encoder click (~2.25°), matches calibrate
-#define NUDGE_KICKSTART    8  // extra fast steps to break static friction before measured steps
-#define NUDGE_SPEED       600 // microsteps/sec for nudge moves (above loaded resonance zone)
+#define NUDGE_SPEED       800 // microsteps/sec constant for all nudge steps
 
 enum DiagState {
     DIAG_HOMING,
@@ -186,15 +185,12 @@ static void nudgeDisc(bool clockwise, int steps) {
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
     delayMicroseconds(50);
 
-    int kickSteps = NUDGE_KICKSTART;
-    unsigned long kickDelay = 1000000UL / (NUDGE_SPEED * 2);   // 2× nudge speed for kickstart
-    unsigned long normalDelay = 1000000UL / NUDGE_SPEED;
-
-    for (int i = 0; i < kickSteps + steps; i++) {
+    unsigned long stepDelay = 1000000UL / NUDGE_SPEED;
+    for (int i = 0; i < steps; i++) {
         digitalWrite(PIN_MOTOR_STEP, HIGH);
         delayMicroseconds(5);
         digitalWrite(PIN_MOTOR_STEP, LOW);
-        delayMicroseconds(i < kickSteps ? kickDelay : normalDelay);
+        delayMicroseconds(stepDelay);
     }
 }
 
@@ -206,15 +202,12 @@ static void undoNudgeRaw() {
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
     delayMicroseconds(50);
 
-    int kickSteps = NUDGE_KICKSTART;
-    unsigned long kickDelay = 1000000UL / (NUDGE_SPEED * 2);
-    unsigned long normalDelay = 1000000UL / NUDGE_SPEED;
-
-    for (int i = 0; i < kickSteps + steps; i++) {
+    unsigned long stepDelay = 1000000UL / NUDGE_SPEED;
+    for (int i = 0; i < steps; i++) {
         digitalWrite(PIN_MOTOR_STEP, HIGH);
         delayMicroseconds(5);
         digitalWrite(PIN_MOTOR_STEP, LOW);
-        delayMicroseconds(i < kickSteps ? kickDelay : normalDelay);
+        delayMicroseconds(stepDelay);
     }
 }
 
@@ -259,18 +252,16 @@ static void diagInput(InputEvent evt) {
 
         case DIAG_ADJUSTING:
             if (evt == INPUT_ENC_CW) {
-                int physicalSteps = NUDGE_KICKSTART + DIAG_NUDGE_STEPS;
-                if (diagNudge + physicalSteps > 400) break;
+                if (diagNudge + DIAG_NUDGE_STEPS > 400) break;
                 nudgeDisc(true, DIAG_NUDGE_STEPS);
-                diagNudge += physicalSteps;
+                diagNudge += DIAG_NUDGE_STEPS;
                 audioPlayTone(TONE_CLICK);
                 drawAdjusting();
 
             } else if (evt == INPUT_ENC_CCW) {
-                int physicalSteps = NUDGE_KICKSTART + DIAG_NUDGE_STEPS;
-                if (diagNudge - physicalSteps < -400) break;
+                if (diagNudge - DIAG_NUDGE_STEPS < -400) break;
                 nudgeDisc(false, DIAG_NUDGE_STEPS);
-                diagNudge -= physicalSteps;
+                diagNudge -= DIAG_NUDGE_STEPS;
                 audioPlayTone(TONE_CLICK);
                 drawAdjusting();
 

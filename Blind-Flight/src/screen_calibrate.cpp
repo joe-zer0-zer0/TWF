@@ -26,8 +26,7 @@
 // ============================================================
 
 #define NUDGE_STEPS      10  // microsteps per encoder click (~2.25°)
-#define CAL_KICKSTART     8  // extra fast steps to break static friction
-#define CAL_NUDGE_SPEED 600  // microsteps/sec (above loaded resonance zone)
+#define CAL_NUDGE_SPEED 800  // microsteps/sec constant for all nudge steps
 
 enum CalState {
     CAL_HOMING,       // running homing sequence
@@ -142,13 +141,12 @@ static void calibrateInput(InputEvent evt) {
                 motorEnable();
                 digitalWrite(PIN_MOTOR_DIR, MOTOR_CW_DIR);
                 delayMicroseconds(50);
-                unsigned long kickDly = 1000000UL / (CAL_NUDGE_SPEED * 2);
-                unsigned long normDly = 1000000UL / CAL_NUDGE_SPEED;
-                for (int i = 0; i < CAL_KICKSTART + NUDGE_STEPS; i++) {
+                unsigned long stepDly = 1000000UL / CAL_NUDGE_SPEED;
+                for (int i = 0; i < NUDGE_STEPS; i++) {
                     digitalWrite(PIN_MOTOR_STEP, HIGH);
                     delayMicroseconds(5);
                     digitalWrite(PIN_MOTOR_STEP, LOW);
-                    delayMicroseconds(i < CAL_KICKSTART ? kickDly : normDly);
+                    delayMicroseconds(stepDly);
                 }
                 audioPlayTone(TONE_CLICK);
                 drawAdjusting();
@@ -158,13 +156,12 @@ static void calibrateInput(InputEvent evt) {
                 motorEnable();
                 digitalWrite(PIN_MOTOR_DIR, MOTOR_CCW_DIR);
                 delayMicroseconds(50);
-                unsigned long kickDly = 1000000UL / (CAL_NUDGE_SPEED * 2);
-                unsigned long normDly = 1000000UL / CAL_NUDGE_SPEED;
-                for (int i = 0; i < CAL_KICKSTART + NUDGE_STEPS; i++) {
+                unsigned long stepDly = 1000000UL / CAL_NUDGE_SPEED;
+                for (int i = 0; i < NUDGE_STEPS; i++) {
                     digitalWrite(PIN_MOTOR_STEP, HIGH);
                     delayMicroseconds(5);
                     digitalWrite(PIN_MOTOR_STEP, LOW);
-                    delayMicroseconds(i < CAL_KICKSTART ? kickDly : normDly);
+                    delayMicroseconds(stepDly);
                 }
                 audioPlayTone(TONE_CLICK);
                 drawAdjusting();

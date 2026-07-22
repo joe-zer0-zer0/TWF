@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.3.6"
+#define FW_VERSION  "1.3.7"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -65,7 +65,7 @@
 
 // Acceleration profile (trapezoidal)
 #define MOTOR_MAX_SPEED     1600    // microsteps/sec at full speed
-#define MOTOR_MIN_SPEED     400     // microsteps/sec at start/end (above resonance zone)
+#define MOTOR_MIN_SPEED     500     // microsteps/sec at start/end (raised from 400 for torque margin)
 #define MOTOR_ACCEL         1600    // microsteps/sec² — halved from 3200 to reduce lost steps under load
 #define HOMING_SPEED        400     // microsteps/sec — slow for homing
 
