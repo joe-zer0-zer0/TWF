@@ -30,7 +30,8 @@
 // the serial output to characterize the error pattern.
 // ============================================================
 
-#define DIAG_NUDGE_STEPS  5   // finer than calibrate's 10 for precision (~1.1°)
+#define DIAG_NUDGE_STEPS  10  // microsteps per encoder click (~2.25°), matches calibrate
+#define NUDGE_KICKSTART    4  // extra fast steps to break static friction before measured steps
 
 enum DiagState {
     DIAG_HOMING,
@@ -182,19 +183,37 @@ static void serialDumpResults() {
 static void nudgeDisc(bool clockwise, int steps) {
     motorEnable();
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
-    delayMicroseconds(10);
-    for (int i = 0; i < steps; i++) {
+    delayMicroseconds(50);   // longer DIR settle for reliable direction changes
+
+    // Kickstart burst at higher speed to break static friction,
+    // then the measured steps at homing speed
+    int kickSteps = NUDGE_KICKSTART;
+    unsigned long kickDelay = 1000000UL / (HOMING_SPEED * 3);  // 3× homing speed
+    unsigned long normalDelay = 1000000UL / HOMING_SPEED;
+
+    for (int i = 0; i < kickSteps + steps; i++) {
         digitalWrite(PIN_MOTOR_STEP, HIGH);
-        delayMicroseconds(2);
+        delayMicroseconds(5);
         digitalWrite(PIN_MOTOR_STEP, LOW);
-        delayMicroseconds(1000000 / HOMING_SPEED);
+        delayMicroseconds(i < kickSteps ? kickDelay : normalDelay);
     }
 }
 
-static void undoNudge() {
+static void undoNudgeRaw() {
     if (diagNudge == 0) return;
-    // Positive nudge = moved CW, so undo by moving CCW (and vice versa)
-    nudgeDisc(diagNudge < 0, abs(diagNudge));
+    // Move exactly abs(diagNudge) steps in the reverse direction — no kickstart
+    bool clockwise = (diagNudge < 0);
+    int steps = abs(diagNudge);
+    motorEnable();
+    digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
+    delayMicroseconds(50);
+    unsigned long normalDelay = 1000000UL / HOMING_SPEED;
+    for (int i = 0; i < steps; i++) {
+        digitalWrite(PIN_MOTOR_STEP, HIGH);
+        delayMicroseconds(5);
+        digitalWrite(PIN_MOTOR_STEP, LOW);
+        delayMicroseconds(normalDelay);
+    }
 }
 
 // ============================================================
@@ -238,16 +257,18 @@ static void diagInput(InputEvent evt) {
 
         case DIAG_ADJUSTING:
             if (evt == INPUT_ENC_CW) {
-                diagNudge += DIAG_NUDGE_STEPS;
-                if (diagNudge > 400) diagNudge = 400;
+                int physicalSteps = NUDGE_KICKSTART + DIAG_NUDGE_STEPS;
+                if (diagNudge + physicalSteps > 400) break;
                 nudgeDisc(true, DIAG_NUDGE_STEPS);
+                diagNudge += physicalSteps;
                 audioPlayTone(TONE_CLICK);
                 drawAdjusting();
 
             } else if (evt == INPUT_ENC_CCW) {
-                diagNudge -= DIAG_NUDGE_STEPS;
-                if (diagNudge < -400) diagNudge = -400;
+                int physicalSteps = NUDGE_KICKSTART + DIAG_NUDGE_STEPS;
+                if (diagNudge - physicalSteps < -400) break;
                 nudgeDisc(false, DIAG_NUDGE_STEPS);
+                diagNudge -= physicalSteps;
                 audioPlayTone(TONE_CLICK);
                 drawAdjusting();
 
@@ -259,7 +280,7 @@ static void diagInput(InputEvent evt) {
                               diagGlass, diagNudge);
 
                 // Undo nudge so motor's tracked position stays correct
-                undoNudge();
+                undoNudgeRaw();
 
                 if (diagGlass < NUM_GLASSES) {
                     diagGlass++;
