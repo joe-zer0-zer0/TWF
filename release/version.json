@@ -1,7 +1,7 @@
 {
-  "version": "1.3.8",
+  "version": "1.3.9",
   "url": "https://github.com/joe-zer0-zer0/TWF/releases/latest/download/firmware.bin",
-  "notes": "Release 1.3.8",
-  "size": 1284752,
-  "sha256": "77b9dc8fe23e77adbf75b56fb85bb93b6b8617bb26bc28c5f4e80d4f8213c6c3"
+  "notes": "Fix homing centering, add HW diagnostics screen",
+  "size": 1287264,
+  "sha256": "22267b8a5a5e6d7d96f7f906f4e42e8518c10c667b1ae201d0448c6ba94d537f"
 }
