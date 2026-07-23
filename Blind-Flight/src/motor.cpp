@@ -237,6 +237,7 @@ bool motorHome() {
         for (int i = 0; i < MICROSTEPS_PER_GLASS; i++) {
             stepMotor();
             delayMicroseconds(1000000 / HOMING_SPEED);
+            if (digitalRead(PIN_HALL) == HIGH) break;
             if ((i & 0xFF) == 0) yield();
         }
         // If still on magnet after a full glass worth of steps, bail
@@ -292,7 +293,7 @@ bool motorHome() {
     // --- Phase 4: Reverse CCW to magnet center ---
     int centerSteps = magnetWidth / 2;
     digitalWrite(PIN_MOTOR_DIR, MOTOR_CCW_DIR);
-    delayMicroseconds(10);
+    delay(20);  // 20ms settling: disc has physical inertia from CW Phase 3
     for (int i = 0; i < centerSteps; i++) {
         stepMotor();
         delayMicroseconds(1000000 / HOMING_SPEED);

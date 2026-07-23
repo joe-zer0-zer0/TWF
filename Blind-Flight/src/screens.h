@@ -35,6 +35,9 @@ extern const Screen screenFavorites;
 // Per-glass alignment diagnostic (measures offset at each position)
 extern const Screen screenGlassDiag;
 
+// Hardware diagnostics (jog, Hall, enable, step test)
+extern const Screen screenHwDiag;
+
 // Diagnostics screen (hidden — long-press encoder on About)
 extern const Screen screenDiagnostics;
 
