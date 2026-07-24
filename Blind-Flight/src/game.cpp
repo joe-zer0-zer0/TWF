@@ -1545,6 +1545,10 @@ static void gameInput(InputEvent evt) {
                     runPourCycle();
                 }
 
+            } else if (evt == INPUT_ENC_CW) {
+                motorMoveToPosition(motorGetPosition() + NUDGE_STEPS);
+            } else if (evt == INPUT_ENC_CCW) {
+                motorMoveToPosition(motorGetPosition() - NUDGE_STEPS);
             } else if (evt == INPUT_BTN_LEFT) {
                 audioPlayTone(TONE_SELECT);
                 Serial.printf("[Game] Skipping remaining — %d poured\n",

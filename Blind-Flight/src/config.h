@@ -68,6 +68,7 @@
 #define MOTOR_MIN_SPEED     500     // microsteps/sec at start/end (raised from 400 for torque margin)
 #define MOTOR_ACCEL         1600    // microsteps/sec² — halved from 3200 to reduce lost steps under load
 #define HOMING_SPEED        400     // microsteps/sec — slow for homing
+#define NUDGE_STEPS         10      // microsteps per encoder detent during pour (~2.25°)
 
 // --- Display geometry ---
 #define SCREEN_W        240

@@ -6,10 +6,14 @@
 // Encoder ISR state (volatile — modified in interrupt)
 // ============================================================
 static volatile int encoderPos = 0;
-static volatile bool encoderMoved = false;
+static volatile unsigned long lastEncMicros = 0;
 static int lastCLK;
 
 void IRAM_ATTR encoderISR() {
+    unsigned long now = micros();
+    if (now - lastEncMicros < 2000) return;   // 2ms debounce — filters contact bounce
+    lastEncMicros = now;
+
     int clk = digitalRead(PIN_ENC_CLK);
     int dt = digitalRead(PIN_ENC_DT);
     if (clk != lastCLK) {
@@ -18,7 +22,6 @@ void IRAM_ATTR encoderISR() {
         } else {
             encoderPos--;
         }
-        encoderMoved = true;
         lastCLK = clk;
     }
 }

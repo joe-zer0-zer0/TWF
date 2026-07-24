@@ -968,7 +968,11 @@ static void h2hInput(InputEvent evt) {
         }
 
         case H2H_POURING:
-            if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
+            if (evt == INPUT_ENC_CW) {
+                motorMoveToPosition(motorGetPosition() + NUDGE_STEPS);
+            } else if (evt == INPUT_ENC_CCW) {
+                motorMoveToPosition(motorGetPosition() - NUDGE_STEPS);
+            } else if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 audioPlayTone(TONE_CONFIRM);
                 glassUsed[currentGlass - 1] = true;
                 pourCount++;
