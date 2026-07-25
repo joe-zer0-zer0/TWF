@@ -54,7 +54,13 @@ static void readValidState() {
 void otaValidateTick() {
     readValidState();
 
-    if (validState != OTA_VALID_PENDING) return;
+    // Gate on the uptime, NOT on having successfully read PENDING_VERIFY.
+    // If the state read ever misreports, an image that is actually pending
+    // would otherwise never confirm — and would then revert on every power
+    // cycle, giving an endless downgrade loop that looks like a brick.
+    // Confirming an already-valid image is harmless; failing to confirm a
+    // pending one is not.
+    if (validState == OTA_VALID_CONFIRMED) return;
     if (millis() < OTA_VALIDATE_UPTIME_MS) return;
 
     otaMarkValid();
@@ -66,12 +72,19 @@ void otaMarkValid() {
         validState = OTA_VALID_CONFIRMED;
         Serial.printf("[OTA] Firmware v%s confirmed after %lu ms — rollback cancelled\n",
                       FW_VERSION, (unsigned long)millis());
-    } else {
-        // Leave the state as PENDING so the next tick retries. If this
-        // keeps failing the image stays revertible, which is the safe
-        // direction to fail in.
-        Serial.printf("[OTA] mark_app_valid failed: %d\n", (int)err);
+        return;
     }
+
+    Serial.printf("[OTA] mark_app_valid failed: %d\n", (int)err);
+
+    if (validState == OTA_VALID_UNKNOWN) {
+        // Factory / USB-written image with no otadata entry. There is
+        // nothing to confirm and nothing to revert to, so stop retrying
+        // rather than logging this every loop.
+        validState = OTA_VALID_CONFIRMED;
+    }
+    // Otherwise leave it PENDING so the next tick retries. An image that
+    // stays revertible is the safe direction to fail in.
 }
 
 OtaValidState otaGetValidState() {
