@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.3.10"
+#define FW_VERSION  "1.4.0"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -128,6 +128,22 @@
 // --- Timing ---
 #define DEBOUNCE_MS         50
 #define LONG_PRESS_MS       600
+
+// --- Rotary encoder quadrature decode (Session 1, v1.4.0) ---
+// Raw quadrature transitions per mechanical detent click. KY-040 modules
+// vary — some report 4 transitions/detent, some 2. UNVERIFIED: this value
+// is a placeholder pending bench confirmation. ENCODER_DEBUG_SERIAL prints
+// the measured transition count per detent on every flash so it can be
+// corrected before relying on it. See docs/specs/alignment_recovery_roadmap.md
+// Session 1.
+#define ENC_COUNTS_PER_DETENT   4
+// Flip to 1 if menu navigation moves opposite the physical turn direction.
+#define ENC_INVERT_DIR          0
+// Temporary: prints a cumulative raw quadrature transition count plus the
+// decoded detent position to Serial. Turn the encoder exactly 10 clicks and
+// divide the change in `raw` by 10 to get the true value for this module.
+// Leave on until ENC_COUNTS_PER_DETENT is confirmed, then set to 0.
+#define ENCODER_DEBUG_SERIAL    1
 
 // --- Head-to-Head multiplayer ---
 #define H2H_MAX_PLAYERS     4

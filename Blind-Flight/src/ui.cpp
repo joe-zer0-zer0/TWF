@@ -2,7 +2,9 @@
 #include "config.h"
 #include "audio.h"
 #include "game.h"
+#include "h2h.h"
 #include "motor.h"
+#include "screens.h"
 #include "settings.h"
 #include "transitions.h"
 
@@ -237,9 +239,12 @@ void uiUpdate() {
             lastActivityMs = now;
 
             if (wasOff) {
-                tft->fillScreen(COL_BG);
-                uiDrawCenteredText("Restoring...", SCREEN_H / 2, FONT_TITLE, COL_TEXT);
-                motorHome();
+                // A flight already in progress may have glasses loaded on the
+                // disc — don't spin the carousel on a bare wake-up press. The
+                // next runPourCycle() re-homes on its own via homedThisFlight.
+                if (!gameIsActive() && !h2hIsActive()) {
+                    runHomingSequence();
+                }
                 needsRedraw = true;
             }
 

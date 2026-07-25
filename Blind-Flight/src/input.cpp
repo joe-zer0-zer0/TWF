@@ -5,24 +5,41 @@
 // ============================================================
 // Encoder ISR state (volatile — modified in interrupt)
 // ============================================================
-static volatile int encoderPos = 0;
-static volatile unsigned long lastEncMicros = 0;
-static int lastCLK;
+// Full quadrature Gray-code decode. index = (prevState << 2) | curState,
+// where state = (CLK << 1) | DT. A bounce returns to the previous state
+// and nets zero in the table, so it's rejected by construction — no
+// time-based debounce needed.
+// DRAM_ATTR: the ISR is installed with ESP_INTR_FLAG_IRAM, so it can run
+// while flash is busy (NVS write, OTA download). A flash-resident lookup
+// table would fault there — force it into RAM.
+static const int8_t DRAM_ATTR QTAB[16] = { 0,-1, 1, 0,  1, 0, 0,-1,
+                                          -1, 0, 0, 1,  0, 1,-1, 0 };
+
+static volatile uint8_t encPrev  = 0;
+static volatile int8_t  encAccum = 0;
+static volatile int     encoderPos = 0;
+
+// Debug only (ENCODER_DEBUG_SERIAL) — cumulative count of valid quadrature
+// transitions. Deliberately NOT reset per detent: the whole point is to
+// compare it against a physically counted number of detent clicks, which
+// a per-detent count cannot reveal (it always equals the configured value).
+static volatile uint32_t encRawTransitions = 0;
 
 void IRAM_ATTR encoderISR() {
-    unsigned long now = micros();
-    if (now - lastEncMicros < 2000) return;   // 2ms debounce — filters contact bounce
-    lastEncMicros = now;
+    uint8_t cur = (digitalRead(PIN_ENC_CLK) << 1) | digitalRead(PIN_ENC_DT);
+    int8_t delta = QTAB[(encPrev << 2) | cur];
+    encPrev = cur;
+    if (delta == 0) return;   // illegal/bounce transition — ignore
 
-    int clk = digitalRead(PIN_ENC_CLK);
-    int dt = digitalRead(PIN_ENC_DT);
-    if (clk != lastCLK) {
-        if (dt != clk) {
-            encoderPos++;
-        } else {
-            encoderPos--;
-        }
-        lastCLK = clk;
+    encAccum += ENC_INVERT_DIR ? (int8_t)-delta : delta;
+    encRawTransitions++;
+
+    if (encAccum >= ENC_COUNTS_PER_DETENT) {
+        encoderPos++;
+        encAccum = 0;
+    } else if (encAccum <= -ENC_COUNTS_PER_DETENT) {
+        encoderPos--;
+        encAccum = 0;
     }
 }
 #endif // !HEADLESS_BUILD
@@ -111,8 +128,9 @@ void inputInit() {
     pinMode(PIN_ENC_CLK, INPUT_PULLUP);
     pinMode(PIN_ENC_DT, INPUT_PULLUP);
     pinMode(PIN_ENC_SW, INPUT);     // External pull-up on GPIO 34
-    lastCLK = digitalRead(PIN_ENC_CLK);
+    encPrev = (digitalRead(PIN_ENC_CLK) << 1) | digitalRead(PIN_ENC_DT);
     attachInterrupt(digitalPinToInterrupt(PIN_ENC_CLK), encoderISR, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(PIN_ENC_DT), encoderISR, CHANGE);
 
     // Buttons
     pinMode(PIN_BTN_LEFT, INPUT_PULLUP);
@@ -134,16 +152,36 @@ void inputUpdate() {
     interrupts();
 
     int delta = raw - lastEncoderSnapshot;
-    while (delta >= 2) {
+    while (delta >= 1) {
         enqueueEvent(INPUT_ENC_CW);
-        lastEncoderSnapshot += 2;
-        delta -= 2;
+        lastEncoderSnapshot += 1;
+        delta -= 1;
     }
-    while (delta <= -2) {
+    while (delta <= -1) {
         enqueueEvent(INPUT_ENC_CCW);
-        lastEncoderSnapshot -= 2;
-        delta += 2;
+        lastEncoderSnapshot -= 1;
+        delta += 1;
     }
+
+#if ENCODER_DEBUG_SERIAL
+    // Temporary — see ENC_COUNTS_PER_DETENT in config.h.
+    // Procedure: note the printed values, turn the encoder exactly 10 detent
+    // clicks in one direction, then read the last line. (raw_after - raw_before)
+    // divided by 10 is the true transitions-per-detent for this module.
+    // `pos` should have moved by exactly 10 once the constant is correct.
+    static uint32_t lastPrintedRaw = 0;
+    uint32_t rawCount;
+    int      posNow;
+    noInterrupts();
+    rawCount = encRawTransitions;
+    posNow   = encoderPos;
+    interrupts();
+    if (rawCount != lastPrintedRaw) {
+        lastPrintedRaw = rawCount;
+        Serial.printf("[Encoder] raw=%lu pos=%d (ENC_COUNTS_PER_DETENT=%d)\n",
+                      (unsigned long)rawCount, posNow, ENC_COUNTS_PER_DETENT);
+    }
+#endif
 
     // --- Buttons ---
     pollEncSw(PIN_ENC_SW, btnEncSw);
