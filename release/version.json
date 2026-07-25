@@ -1,7 +1,7 @@
 {
-  "version": "1.4.2",
+  "version": "1.4.3",
   "url": "https://github.com/joe-zer0-zer0/TWF/releases/latest/download/firmware.bin",
-  "notes": "Release 1.4.2",
-  "size": 1288112,
-  "sha256": "fe3aa102cc48f8169762ccdc540ca143115e801145ce6ded0e6ea9b353c2b580"
+  "notes": "Release 1.4.3",
+  "size": 1288128,
+  "sha256": "37913dcd58828ab820f2f8195cd5bb4b9453f1fd3eb7701570c5f196b2f156d5"
 }
