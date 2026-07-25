@@ -8,6 +8,7 @@
 #include "wifi_portal.h"
 #include "favorites.h"
 #include "device_id.h"
+#include "ota.h"
 
 // ============================================================
 // Blind Flight — Settings Screen (Session 17)
@@ -700,11 +701,25 @@ static void aboutDraw(bool fullRedraw) {
         tft->setTextColor(COL_TEXT, COL_BG);
         tft->drawString("Firmware", labelX, startY);
 
+        // Version — drawn orange while the image is still on probation, so
+        // an unconfirmed build is visible without a serial console.
+        bool fwPending = (otaGetValidState() == OTA_VALID_PENDING);
         tft->setTextDatum(MR_DATUM);
-        tft->setTextColor(COL_ACCENT, COL_BG);
+        tft->setTextColor(fwPending ? COL_MOVING : COL_ACCENT, COL_BG);
         char vBuf[12];
         snprintf(vBuf, sizeof(vBuf), "v%s", FW_VERSION);
         tft->drawString(vBuf, SCREEN_W - 16, startY);
+
+        if (fwPending) {
+            char pBuf[24];
+            snprintf(pBuf, sizeof(pBuf), "confirming %lus",
+                     (unsigned long)otaValidateSecondsRemaining());
+            tft->setTextSize(FONT_SMALL);
+            tft->setTextDatum(MR_DATUM);
+            tft->setTextColor(COL_MOVING, COL_BG);
+            tft->drawString(pBuf, SCREEN_W - 16, startY + 14);
+            tft->setTextSize(FONT_BODY);
+        }
 
         // Labels
         int y = startY + lineH;

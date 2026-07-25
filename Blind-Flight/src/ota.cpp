@@ -10,9 +10,79 @@
 // Blind Flight — OTA Firmware Update Module
 // ============================================================
 
+// ============================================================
+// Rollback safety — see ota.h for the full rationale
+// ============================================================
+
+static OtaValidState validState  = OTA_VALID_UNKNOWN;
+static bool          stateRead   = false;
+
+// Read the running partition's OTA state. Done once, lazily, on the
+// first tick rather than in setup() — nothing here needs to happen
+// before the device is up, and keeping it out of setup() means a fault
+// in this code can itself be rolled back.
+static void readValidState() {
+    if (stateRead) return;
+    stateRead = true;
+
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    esp_ota_img_states_t state;
+
+    if (running == nullptr ||
+        esp_ota_get_state_partition(running, &state) != ESP_OK) {
+        // No otadata entry — a factory image, or one written over USB.
+        // There is nothing to confirm and nothing to roll back to.
+        validState = OTA_VALID_UNKNOWN;
+        Serial.println("[OTA] Running image has no OTA state (factory/USB image)");
+        return;
+    }
+
+    if (state == ESP_OTA_IMG_PENDING_VERIFY) {
+        validState = OTA_VALID_PENDING;
+        Serial.printf("[OTA] Image PENDING VERIFY on %s — confirming after %lu s "
+                      "of healthy uptime. A reboot before then reverts to the "
+                      "previous firmware.\n",
+                      running->label,
+                      (unsigned long)(OTA_VALIDATE_UPTIME_MS / 1000));
+    } else {
+        validState = OTA_VALID_CONFIRMED;
+        Serial.printf("[OTA] Image already confirmed on %s (state=%d)\n",
+                      running->label, (int)state);
+    }
+}
+
+void otaValidateTick() {
+    readValidState();
+
+    if (validState != OTA_VALID_PENDING) return;
+    if (millis() < OTA_VALIDATE_UPTIME_MS) return;
+
+    otaMarkValid();
+}
+
 void otaMarkValid() {
-    esp_ota_mark_app_valid_cancel_rollback();
-    Serial.println("[OTA] Current firmware marked valid");
+    esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
+    if (err == ESP_OK) {
+        validState = OTA_VALID_CONFIRMED;
+        Serial.printf("[OTA] Firmware v%s confirmed after %lu ms — rollback cancelled\n",
+                      FW_VERSION, (unsigned long)millis());
+    } else {
+        // Leave the state as PENDING so the next tick retries. If this
+        // keeps failing the image stays revertible, which is the safe
+        // direction to fail in.
+        Serial.printf("[OTA] mark_app_valid failed: %d\n", (int)err);
+    }
+}
+
+OtaValidState otaGetValidState() {
+    return validState;
+}
+
+uint32_t otaValidateSecondsRemaining() {
+    if (validState != OTA_VALID_PENDING) return 0;
+    uint32_t now = millis();
+    if (now >= OTA_VALIDATE_UPTIME_MS) return 0;
+    return (OTA_VALIDATE_UPTIME_MS - now + 999) / 1000;
 }
 
 // ============================================================

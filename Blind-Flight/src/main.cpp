@@ -28,7 +28,11 @@ void setup() {
     Serial.begin(115200);
     Serial.println("\n=== Blind Flight v" FW_VERSION " ===\n");
 
-    otaMarkValid();
+    // NOTE: the running image is deliberately NOT confirmed here. It used
+    // to be, on this exact line, which cancelled bootloader rollback before
+    // any of the init below had a chance to fail. Confirmation now happens
+    // in loop() via otaValidateTick() once the image has proven it can run.
+    // See ota.h.
 
     deviceIdInit();
 
@@ -78,6 +82,8 @@ void setup() {
 }
 
 void loop() {
+    otaValidateTick();      // confirms a freshly-installed image once healthy
+
     batteryUpdate();
     audioUpdate();
     inputUpdate();

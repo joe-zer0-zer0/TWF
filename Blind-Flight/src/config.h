@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.4.1"
+#define FW_VERSION  "1.4.2"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -177,3 +177,15 @@
 #define OTA_MANIFEST_URL    "https://raw.githubusercontent.com/joe-zer0-zer0/TWF/master/release/version.json"
 #define OTA_CHECK_TIMEOUT   10000       // ms for manifest fetch
 #define OTA_DOWNLOAD_TIMEOUT 120000     // ms for binary download
+
+// Healthy uptime a freshly-installed image must accumulate before it
+// confirms itself and cancels bootloader rollback. Long enough to cover
+// splash, homing, and settling into idle — the window where a bad build
+// realistically crashes. See ota.h.
+//
+// TRADE-OFF: power-cycling the device inside this window makes the
+// bootloader revert to the previous firmware. That is the mechanism
+// working as designed, but it means "update, then immediately switch
+// off" silently downgrades the unit. Raising this value widens that
+// trap; lowering it shrinks the crash window actually being checked.
+#define OTA_VALIDATE_UPTIME_MS  30000

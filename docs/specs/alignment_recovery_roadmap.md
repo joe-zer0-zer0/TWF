@@ -611,15 +611,31 @@ Also unify the state-buffer sizes: `broadcastState` uses 1280 B while
 `sendStateToClient` uses 1024 B, so a client's first snapshot truncates
 differently from subsequent broadcasts.
 
-**7b — `otaMarkValid()` defeats rollback. NOW P0, NOT P1.** As of 2026-07-25 the
-ESP32's USB port is inaccessible with the device assembled, so OTA is the only
-delivery path and there is no way to recover a bricked unit short of disassembly.
-Also verify whether the stock Arduino-ESP32 bootloader even has rollback enabled —
-if it does not, moving this call is cosmetic and the real work is a boot-time
-health check plus a manual recovery path. Pull this ahead of the remaining
-Session 7 items.
+**7b — `otaMarkValid()` defeats rollback — DONE, pulled forward (v1.4.2).**
+Escalated to P0 on 2026-07-25 when USB access was lost, and shipped ahead of
+Session 3.
 
-Called as the first line of
+*Verified first:* the stock Arduino-ESP32 bootloader has
+`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`, `ESP_SYSTEM_PANIC_PRINT_REBOOT=y`,
+`ESP_TASK_WDT_PANIC=y` (5 s) and `BOOTLOADER_WDT_ENABLE=y` (9 s). Rollback is
+genuinely armed, so the old call site was discarding working protection rather
+than being cosmetic.
+
+*Shipped:* confirmation moved out of `setup()` into `otaValidateTick()`, called
+from `loop()`, gated on `OTA_VALIDATE_UPTIME_MS` (30 s) of healthy uptime.
+Post-update screen tells the user to stay powered; About screen shows the version
+in orange with a countdown while pending.
+
+*Deliberately NOT gated on homing success*, contrary to the sketch above. Homing
+fails for **mechanical** reasons — detached magnet, jammed disc, wedged glass. Tying
+firmware validity to it would turn a mechanical fault into a firmware rollback, and
+since the previous build would fail to home too, the result is a silent downgrade
+that fixes nothing and hides the real cause. Uptime is the honest health signal.
+
+*Known limit:* catches crashes, not hangs — `loopTask` is on core 1 and the task WDT
+does not watch core 1's idle task.
+
+Was: called as the first line of
 `setup()` ([main.cpp:31](../../Blind-Flight/src/main.cpp:31)), before display,
 Wi-Fi, or motor init. A new image that crash-loops has already been marked
 valid and will never roll back. Move it to after the device reaches a known-good

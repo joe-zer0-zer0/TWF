@@ -146,14 +146,23 @@ to master. The device reads that file from `OTA_MANIFEST_URL` (`config.h`).
 
 ### Consequences of losing USB
 
-* **There is no recovery path from a bad image.** `otaMarkValid()` is called on the
-  first line of `setup()` ([main.cpp:31](Blind-Flight/src/main.cpp:31)), before
-  display, Wi-Fi, or motor init — so a crash-looping build has already cancelled its
-  own rollback. Separately, the Arduino-ESP32 stock bootloader generally ships with
-  rollback disabled, in which case there is no automatic recovery regardless of where
-  that call sits. **Roadmap item 7b is now P0, not P1.** Treat any change to
-  `setup()`, `main.cpp`, `ota.cpp`, or partition config as high-risk and review it
-  twice before tagging.
+* **Bootloader rollback is the only safety net, and it is armed (as of v1.4.2).**
+  The stock Arduino-ESP32 bootloader ships with `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`,
+  `ESP_SYSTEM_PANIC_PRINT_REBOOT=y`, and the task/interrupt/bootloader watchdogs on —
+  verified in `~/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/sdkconfig`.
+  A new image therefore boots in `PENDING_VERIFY`, and any reboot before it confirms
+  itself — including the automatic reboot after a panic — reverts to the previous
+  partition. Confirmation is gated on `OTA_VALIDATE_UPTIME_MS` (30 s) of healthy
+  running, in `otaValidateTick()` from `loop()`. **Never move that confirmation back
+  into `setup()`.** Treat any change to `setup()`, `main.cpp`, `ota.cpp`, or the
+  partition table as high-risk and review it twice before tagging.
+* **This catches crashes, not hangs.** Arduino's `loopTask` runs on core 1, whose
+  idle task the task WDT does not watch, so an infinite loop in `loop()` neither
+  reboots nor rolls back. Blocking motor code is the realistic source of such a hang
+  — one more reason roadmap Session 8 (motor task migration) matters.
+* **After an OTA update, leave the device powered for at least 30 seconds.** Power-
+  cycling inside the confirmation window is exactly what triggers a revert, so an
+  impatient switch-off silently downgrades the unit. The post-update screen says so.
 * **Prefer small, frequent releases** over batching many changes into one tag. If
   something bricks, the smaller the diff, the faster the diagnosis.
 * Disassembly to reach the USB port is the fallback, and it is expensive. Assume it

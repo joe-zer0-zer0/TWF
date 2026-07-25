@@ -143,6 +143,12 @@ static void otaDraw(bool fullRedraw) {
             uiDrawCenteredText("Update", 90, FONT_BODY, COL_SELECTED);
             uiDrawCenteredText("complete!", 115, FONT_BODY, COL_SELECTED);
             uiDrawHint("Restarting...", 155);
+            // The new image boots in PENDING_VERIFY and only commits after
+            // OTA_VALIDATE_UPTIME_MS of healthy running. Powering off inside
+            // that window reverts to the old firmware — say so here, because
+            // this screen is the one moment the user is definitely watching.
+            uiDrawHint("Stay powered ~30s", 185);
+            uiDrawHint("to keep this version", 203);
             uiDrawSoftButtons("", "");
             break;
 
