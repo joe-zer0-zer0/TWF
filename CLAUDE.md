@@ -4,7 +4,7 @@
 
 **Blind Flight** is a physical interactive blind-tasting device (whiskey/wine). A motorized rotating carousel positions four Glencairn glasses under a fixed pour spout for sequential automated pouring, with a gamified, suspenseful reveal experience. Built for use at tasting events.
 
-Jeremy is the sole designer/developer across hardware, firmware, and enclosure. **Jeremy has no ESP32/Arduino/C++ background** — Claude writes all code; Jeremy flashes, tests on real hardware, and reports exact symptoms. Diagnose from symptom patterns. Project status: **active prototype, beta preparation.** First public test occurred; the platform stalled after two glasses due to weight/friction (see Current State).
+Jeremy is the sole designer/developer across hardware, firmware, and enclosure. **Jeremy has no ESP32/Arduino/C++ background** — Claude writes all code **and ships it OTA** (see "Firmware Delivery — OTA Only" — USB flashing is no longer possible); Jeremy accepts the update on-device, tests on real hardware, and reports exact symptoms. Diagnose from symptom patterns. Project status: **active prototype, beta preparation.** First public test occurred; the platform stalled after two glasses due to weight/friction (see Current State).
 
 \---
 
@@ -100,14 +100,75 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 
 \---
 
+## Firmware Delivery — OTA Only (MANDATORY)
+
+**As of 2026-07-25, USB flashing is no longer possible.** The ESP32's USB port is
+inaccessible with the device assembled. **OTA is the only way firmware reaches the
+hardware.** A build that compiles locally but is never released is a build Jeremy
+cannot test.
+
+Therefore: **a session is not finished when the code compiles. It is finished when
+the release is live and verified.** Any time the old workflow would have said "flash
+and test," run the full release procedure below without being asked.
+
+### Release procedure
+
+1. **Bump `FW_VERSION` in `src/config.h`.** Patch for bug fixes and session work,
+   minor for behavioural changes. This must match the tag exactly — the OTA manifest
+   is generated from the tag, and a device already running that version will not
+   offer the update.
+2. **Compile both environments** — `esp32` and `esp32-headless`. Never tag a build
+   that has not compiled locally; CI builds only `esp32`, so a headless-only break
+   ships silently.
+
+   ```bash
+   cd Blind-Flight && pio run -e esp32 && pio run -e esp32-headless
+   ```
+   (PlatformIO is not on PATH in the Bash tool; use `~/.platformio/penv/Scripts/pio.exe`.)
+3. **Commit, then rebase onto origin/master before pushing.** CI pushes a
+   `version.json` commit back to master after every release, so local master is
+   almost always one behind. `git pull --rebase origin master` first.
+4. **Push master, then push the tag:**
+
+   ```bash
+   git push origin master && git tag -a vX.Y.Z -m "vX.Y.Z — <summary>" && git push origin vX.Y.Z
+   ```
+5. **Watch the workflow to completion** — `gh run watch <id> --exit-status`. A failed
+   run means no release exists and the device will not see the update.
+6. **Verify the published manifest** — pull, then confirm `release/version.json`
+   shows the new version and that the `size`/`sha256` match the release asset. The
+   device validates both; a mismatch aborts the update on-device.
+7. **Then** give Jeremy the testing checklist, noting the version to look for.
+
+`.github/workflows/release.yml` does the rest: builds `esp32`, publishes the GitHub
+Release with `firmware.bin`, regenerates `release/version.json`, and commits it back
+to master. The device reads that file from `OTA_MANIFEST_URL` (`config.h`).
+
+### Consequences of losing USB
+
+* **There is no recovery path from a bad image.** `otaMarkValid()` is called on the
+  first line of `setup()` ([main.cpp:31](Blind-Flight/src/main.cpp:31)), before
+  display, Wi-Fi, or motor init — so a crash-looping build has already cancelled its
+  own rollback. Separately, the Arduino-ESP32 stock bootloader generally ships with
+  rollback disabled, in which case there is no automatic recovery regardless of where
+  that call sits. **Roadmap item 7b is now P0, not P1.** Treat any change to
+  `setup()`, `main.cpp`, `ota.cpp`, or partition config as high-risk and review it
+  twice before tagging.
+* **Prefer small, frequent releases** over batching many changes into one tag. If
+  something bricks, the smaller the diff, the faster the diagnosis.
+* Disassembly to reach the USB port is the fallback, and it is expensive. Assume it
+  is unavailable.
+
+\---
+
 ## Working Conventions
 
 These were shaped by the chat-based workflow; adapt as noted for Claude Code:
 
 * **Spec-first for complex features:** new game modes get a markdown spec (design decisions, file-by-file change breakdown, testing checklist) before implementation. Keep specs in the repo (e.g., `docs/specs/`).
-* **Session-scoped work:** each work unit is a discrete, testable deliverable that produces a flashable build. Don't sprawl across unrelated modules.
+* **Session-scoped work:** each work unit is a discrete, testable deliverable that ends in a **released** build. Don't sprawl across unrelated modules. See "Firmware Delivery — OTA Only" above: compiling is not the finish line, tagging and verifying the release is.
 * **Bug batching:** issues from physical testing accumulate into a punch list, then get fixed together in a dedicated bug-fix pass.
-* **Test loop:** Claude cannot run this hardware. Every change ends with a concrete physical testing checklist for Jeremy. Jeremy reports exact symptoms; diagnose from patterns.
+* **Test loop:** Claude cannot run this hardware. Every change ends with the release pushed OTA (see above) **and** a concrete physical testing checklist for Jeremy, stating which version he should see the device offer. Jeremy reports exact symptoms; diagnose from patterns.
 * **Jeremy often arrives with root causes pre-analyzed** — trust his diagnosis as a starting hypothesis and verify against the code.
 * **Explain non-obvious C++/embedded concepts briefly** when introducing them — Jeremy is learning the domain but shouldn't need to be an expert to review changes.
 * **File carry-forward is obsolete in Claude Code** — the repo is the source of truth. Use git commits per session/feature instead.

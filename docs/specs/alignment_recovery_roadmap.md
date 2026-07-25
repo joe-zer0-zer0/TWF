@@ -611,7 +611,15 @@ Also unify the state-buffer sizes: `broadcastState` uses 1280 B while
 `sendStateToClient` uses 1024 B, so a client's first snapshot truncates
 differently from subsequent broadcasts.
 
-**7b — `otaMarkValid()` defeats rollback.** Called as the first line of
+**7b — `otaMarkValid()` defeats rollback. NOW P0, NOT P1.** As of 2026-07-25 the
+ESP32's USB port is inaccessible with the device assembled, so OTA is the only
+delivery path and there is no way to recover a bricked unit short of disassembly.
+Also verify whether the stock Arduino-ESP32 bootloader even has rollback enabled —
+if it does not, moving this call is cosmetic and the real work is a boot-time
+health check plus a manual recovery path. Pull this ahead of the remaining
+Session 7 items.
+
+Called as the first line of
 `setup()` ([main.cpp:31](../../Blind-Flight/src/main.cpp:31)), before display,
 Wi-Fi, or motor init. A new image that crash-loops has already been marked
 valid and will never roll back. Move it to after the device reaches a known-good
