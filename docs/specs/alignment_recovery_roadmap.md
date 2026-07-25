@@ -2,7 +2,8 @@
 
 **Created:** 2026-07-24
 **Baseline:** v1.3.10 (`4fcae04`)
-**Status:** Planned — no sessions executed yet
+**Status:** Session 1 complete (v1.4.0, `54b8e30`). Session 2 complete (v1.4.1).
+Next: Session 3.
 
 ---
 
@@ -159,7 +160,14 @@ to evaluate anything else.
 
 ---
 
-### Session 1 — Encoder quadrature decode
+### Session 1 — Encoder quadrature decode — **DONE (v1.4.0, `54b8e30`)**
+
+Bench-confirmed: nudge commands reach the motor from the Calibrate screen.
+Also confirmed on the same run — after homing, the disc moves **CCW** to
+glass 1 as Corrected Fact #2 predicts, and misses alignment by the backlash
+that direction change introduces. Measured lash: **2–3 clicks at 10
+microsteps/click ≈ 20–30 microsteps**, somewhat below the ~60 in Corrected
+Fact #3 but the same order and the same sign. Session 3 is unblocked.
 
 **Priority:** P0. Blocks all measurement work.
 **Model:** Sonnet 5 — well-specified, self-contained, standard algorithm.
@@ -230,11 +238,41 @@ hardware, don't guess.
 
 ---
 
-### Session 2 — Nudge determinism
+### Session 2 — Nudge determinism — **DONE (v1.4.1)**
 
 **Priority:** P0. Second half of making the instrument trustworthy.
 **Model:** Sonnet 5 — mechanical changes, tightly specified.
 **Target version:** 1.4.1
+
+**Deviations from the spec as written, and why:**
+
+- **`NUDGE_STEPS` was NOT reduced to 4 globally.** It was split in two.
+  `NUDGE_STEPS` stays at **10** for the pour-time nudge (`game.cpp`,
+  `h2h.cpp`), and a new `CAL_NUDGE_STEPS = 4` serves the calibrate and
+  glass-diag screens. Rationale: bench testing after Session 1 measured
+  roughly 2–3 clicks of backlash absorption after a direction change at 10
+  microsteps/click, i.e. **20–30 microsteps of lash**. At a uniform 4
+  steps/click that same reversal costs 5–8 dead clicks. That is an acceptable
+  price on a measurement screen, where resolution is the whole point, but not
+  during a live pour where the operator wants a glass moved *now*. The two
+  call sites have genuinely different requirements.
+- **`NUDGE_SPEED = 300` looks like it violates the `MOTOR_MIN_SPEED >= 400`
+  rule in `CLAUDE.md`. It does not.** That rule governs *ramped* moves, where
+  the disc dwells at the start speed long enough to excite low-speed
+  resonance. A nudge is an unramped burst of 4–10 steps lasting 13–33 ms —
+  shorter than the several oscillation cycles resonance needs to build. The
+  constant carries a comment saying so, so a future session doesn't "fix" it.
+- **`ensureMotorOn()` in `screen_hw_diag.cpp` lost its local `delay(5)`** —
+  `motorEnable()` owns the settle now. The boolean flag remains because it
+  still drives the page indicator and `hwCleanup()`.
+- **Clamp behaviour changed on both nudge screens.** Previously the counter
+  clamped at ±200 / ±400 while the disc kept moving, so display and disc
+  silently diverged at the limit. Now the click is rejected outright and
+  neither moves.
+- **`HW_DIAG_SPEED` (800 sps) in `screen_hw_diag.cpp` was left alone.** The
+  1- and 10-step jog sizes have the same dead-stop pull-in problem, but that
+  screen is a measurement instrument for characterising the driver — changing
+  its speed changes what it measures. Revisit only if jog readings look off.
 
 **Problem.** Three nudge implementations start instantly at 800 sps from a dead
 stop with no post-enable settling delay. This is the same stiction issue

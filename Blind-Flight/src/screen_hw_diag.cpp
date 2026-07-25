@@ -57,11 +57,11 @@ static bool  stepTestEnabled  = false;   // motor enabled for step test
 // ============================================================
 
 static void ensureMotorOn(bool* flag) {
-    if (!*flag) {
-        motorEnable();
-        delay(5);   // TMC2209 charge pump + current regulation settling
-        *flag = true;
-    }
+    // motorEnable() now owns the TMC2209 settling delay (see motor.h), so the
+    // local delay(5) that used to live here is gone. The flag is still needed
+    // to drive the page's "motor on" indicator and hwCleanup().
+    motorEnable();
+    *flag = true;
 }
 
 static void rawStep(int steps, bool clockwise) {

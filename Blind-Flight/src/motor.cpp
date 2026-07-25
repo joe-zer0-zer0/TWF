@@ -44,6 +44,14 @@ static int homeOffsetValue = 0;  // cached trim (microsteps)
 static int lastDrift       = 0;   // drift (microsteps) from last verified spin
 static int lastMagnetWidth = 0;   // magnet width from last homing
 
+// Driver enable state (Session 2 / v1.4.1)
+// The TMC2209 needs a few ms after EN goes LOW for its charge pump and
+// current regulation to come up. Stepping during that window produces
+// reduced torque and the first steps get lost — the stiction symptom.
+// Tracking the state means the 5 ms settle is paid exactly once per
+// disabled -> enabled transition, not on every move.
+static bool driverEnabled = false;
+
 // ============================================================
 // Low-level step pulse
 // ============================================================
@@ -59,7 +67,7 @@ static void stepMotor() {
 static int moveSteps(int steps, bool clockwise, int maxSpeed) {
     if (steps <= 0) return 0;
 
-    digitalWrite(PIN_MOTOR_EN, LOW);
+    motorEnable();
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
     delayMicroseconds(10);
 
@@ -145,7 +153,7 @@ static int moveStepsVerified(int steps, bool clockwise, int maxSpeed, int startP
     bool prevHallLow = (digitalRead(PIN_HALL) == LOW);
     bool triggered = false;
 
-    digitalWrite(PIN_MOTOR_EN, LOW);
+    motorEnable();
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
     delayMicroseconds(10);
 
@@ -210,6 +218,7 @@ void motorInit() {
     pinMode(PIN_MOTOR_DIR, OUTPUT);
     pinMode(PIN_MOTOR_EN, OUTPUT);
     digitalWrite(PIN_MOTOR_EN, HIGH);   // Disabled at start
+    driverEnabled = false;
     digitalWrite(PIN_MOTOR_STEP, LOW);
     digitalWrite(PIN_MOTOR_DIR, LOW);
 
@@ -228,7 +237,7 @@ void motorInit() {
 // ============================================================
 
 bool motorHome() {
-    digitalWrite(PIN_MOTOR_EN, LOW);
+    motorEnable();
 
     // --- Phase 1: If sitting on magnet, move off ---
     if (digitalRead(PIN_HALL) == LOW) {
@@ -376,7 +385,7 @@ void motorSpinToGlass(int glass, int extraRevolutions) {
     // Add extra full revolutions for theatrics / unpredictability
     int totalSteps = cwDist + extraRevolutions * MICROSTEPS_PER_REV;
 
-    digitalWrite(PIN_MOTOR_EN, LOW);
+    motorEnable();
     moveStepsVerified(totalSteps, true, runtimeMaxSpeed, currentNorm);  // always clockwise, runtime speed
     currentMotorPos = targetPos;
 
@@ -395,7 +404,7 @@ void motorSpinToGlass(int glass, int extraRevolutions) {
 
 void motorSpinSteps(int steps) {
     if (steps <= 0) return;
-    digitalWrite(PIN_MOTOR_EN, LOW);
+    motorEnable();
     moveSteps(steps, true, runtimeMaxSpeed);         // always clockwise, runtime speed
     currentMotorPos = (currentMotorPos + steps) % MICROSTEPS_PER_REV;
 }
@@ -405,11 +414,15 @@ int motorGetPosition() {
 }
 
 void motorEnable() {
+    if (driverEnabled) return;          // already powered — no settle needed
     digitalWrite(PIN_MOTOR_EN, LOW);
+    delay(5);                           // TMC2209 charge pump + current regulation
+    driverEnabled = true;
 }
 
 void motorDisable() {
     digitalWrite(PIN_MOTOR_EN, HIGH);
+    driverEnabled = false;
 }
 
 // ============================================================

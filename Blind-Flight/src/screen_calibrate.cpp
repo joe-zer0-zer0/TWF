@@ -13,7 +13,7 @@
 //
 // Flow:
 //   1. Homes the motor, moves glass 1 to the pour position.
-//   2. Encoder nudges the disc ±NUDGE_STEPS per click.
+//   2. Encoder nudges the disc ±CAL_NUDGE_STEPS per click.
 //      The display shows the current offset and direction hints.
 //   3. Right button (CONFIRM): saves the offset to NVS, then
 //      visits all 4 glass positions sequentially so the user
@@ -25,8 +25,14 @@
 // effective pour offset in the motor module.
 // ============================================================
 
-#define NUDGE_STEPS      10  // microsteps per encoder click (~2.25°)
-#define CAL_NUDGE_SPEED 800  // microsteps/sec constant for all nudge steps
+// Nudge step size and speed come from config.h (CAL_NUDGE_STEPS, NUDGE_SPEED)
+// so this screen, glass diag, and the pour-time nudge stay in sync.
+
+// Numeric offset field — kept as constants so the partial redraw and the
+// full redraw always agree on where the value lives. FONT_LARGE is 8px tall
+// per unit of text size, drawn with MC_DATUM (vertically centred on VAL_Y).
+#define CAL_VAL_Y    (CONTENT_Y + 55)
+#define CAL_VAL_H    (8 * FONT_LARGE + 4)
 
 enum CalState {
     CAL_HOMING,       // running homing sequence
@@ -43,6 +49,18 @@ static int      verifyGlass = 0;    // 1–4 during verification
 // Drawing helpers
 // ============================================================
 
+// Redraw only the numeric offset field. A full drawAdjusting() is a
+// fillScreen plus every string — 50–100 ms of SPI, which made the encoder
+// feel laggy on every detent. This touches one 224×36 rect instead.
+static void drawOffsetValue() {
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillRect(8, CAL_VAL_Y - CAL_VAL_H / 2, SCREEN_W - 16, CAL_VAL_H, COL_BG);
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%+d", calOffset);
+    uiDrawCenteredText(buf, CAL_VAL_Y, FONT_LARGE, COL_ACCENT);
+}
+
 static void drawAdjusting() {
     TFT_eSPI* tft = uiGetTFT();
     tft->fillScreen(COL_BG);
@@ -51,9 +69,7 @@ static void drawAdjusting() {
     uiDrawCenteredText("Glass 1 at Spout", CONTENT_Y + 8, FONT_BODY, COL_TEXT);
 
     // Show current offset value large
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%+d", calOffset);
-    uiDrawCenteredText(buf, CONTENT_Y + 55, FONT_LARGE, COL_ACCENT);
+    drawOffsetValue();
 
     uiDrawCenteredText("steps", CONTENT_Y + 95, FONT_SMALL, COL_DIM);
 
@@ -131,40 +147,40 @@ static void calibrateDraw(bool fullRedraw) {
     }
 }
 
+// Raw nudge — bypasses the motor module's position tracking on purpose:
+// the whole point of this screen is to move the disc relative to where the
+// firmware thinks it is. motorEnable() guarantees the driver has settled
+// before the first STEP pulse.
+static void nudgeDisc(bool clockwise) {
+    motorEnable();
+    digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
+    delayMicroseconds(50);
+
+    unsigned long stepDly = 1000000UL / NUDGE_SPEED;
+    for (int i = 0; i < CAL_NUDGE_STEPS; i++) {
+        digitalWrite(PIN_MOTOR_STEP, HIGH);
+        delayMicroseconds(5);
+        digitalWrite(PIN_MOTOR_STEP, LOW);
+        delayMicroseconds(stepDly);
+    }
+}
+
 static void calibrateInput(InputEvent evt) {
     switch (calState) {
 
         case CAL_ADJUSTING:
             if (evt == INPUT_ENC_CW) {
-                calOffset += NUDGE_STEPS;
-                if (calOffset > 200) calOffset = 200;
-                motorEnable();
-                digitalWrite(PIN_MOTOR_DIR, MOTOR_CW_DIR);
-                delayMicroseconds(50);
-                unsigned long stepDly = 1000000UL / CAL_NUDGE_SPEED;
-                for (int i = 0; i < NUDGE_STEPS; i++) {
-                    digitalWrite(PIN_MOTOR_STEP, HIGH);
-                    delayMicroseconds(5);
-                    digitalWrite(PIN_MOTOR_STEP, LOW);
-                    delayMicroseconds(stepDly);
-                }
+                if (calOffset + CAL_NUDGE_STEPS > 200) break;
+                nudgeDisc(true);
+                calOffset += CAL_NUDGE_STEPS;
                 audioPlayTone(TONE_CLICK);
-                drawAdjusting();
+                drawOffsetValue();
             } else if (evt == INPUT_ENC_CCW) {
-                calOffset -= NUDGE_STEPS;
-                if (calOffset < -200) calOffset = -200;
-                motorEnable();
-                digitalWrite(PIN_MOTOR_DIR, MOTOR_CCW_DIR);
-                delayMicroseconds(50);
-                unsigned long stepDly = 1000000UL / CAL_NUDGE_SPEED;
-                for (int i = 0; i < NUDGE_STEPS; i++) {
-                    digitalWrite(PIN_MOTOR_STEP, HIGH);
-                    delayMicroseconds(5);
-                    digitalWrite(PIN_MOTOR_STEP, LOW);
-                    delayMicroseconds(stepDly);
-                }
+                if (calOffset - CAL_NUDGE_STEPS < -200) break;
+                nudgeDisc(false);
+                calOffset -= CAL_NUDGE_STEPS;
                 audioPlayTone(TONE_CLICK);
-                drawAdjusting();
+                drawOffsetValue();
             } else if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 // Confirm: save and start verification
                 audioPlayTone(TONE_CONFIRM);

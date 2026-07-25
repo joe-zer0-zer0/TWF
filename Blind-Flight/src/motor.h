@@ -52,7 +52,14 @@ void motorSpinSteps(int steps);
 // Current motor position in microsteps (0 = home)
 int motorGetPosition();
 
-// Enable/disable motor driver (disable saves power, loses holding torque)
+// Enable/disable motor driver (disable saves power, loses holding torque).
+//
+// motorEnable() is idempotent and blocks for ~5 ms on the disabled ->
+// enabled transition only, giving the TMC2209's charge pump and current
+// regulation time to come up before the first STEP pulse. Every code path
+// that steps the motor must go through it — stepping into an unsettled
+// driver is what makes the first nudge after entering a screen do nothing.
+// Never write PIN_MOTOR_EN directly.
 void motorEnable();
 void motorDisable();
 

@@ -30,8 +30,13 @@
 // the serial output to characterize the error pattern.
 // ============================================================
 
-#define DIAG_NUDGE_STEPS  10  // microsteps per encoder click (~2.25°), matches calibrate
-#define NUDGE_SPEED       800 // microsteps/sec constant for all nudge steps
+// Nudge step size and speed come from config.h (CAL_NUDGE_STEPS, NUDGE_SPEED),
+// shared with the calibrate screen so both instruments read the same scale.
+
+// Numeric nudge field — see screen_calibrate.cpp for the partial-redraw
+// rationale. FONT_LARGE is 8px per text-size unit, drawn with MC_DATUM.
+#define DIAG_VAL_Y    (CONTENT_Y + 50)
+#define DIAG_VAL_H    (8 * FONT_LARGE + 4)
 
 enum DiagState {
     DIAG_HOMING,
@@ -50,6 +55,17 @@ static int       diagRunNum  = 0;
 // Drawing helpers
 // ============================================================
 
+// Redraw only the numeric nudge field — avoids a full fillScreen + text
+// rebuild on every encoder detent.
+static void drawNudgeValue() {
+    TFT_eSPI* tft = uiGetTFT();
+    tft->fillRect(8, DIAG_VAL_Y - DIAG_VAL_H / 2, SCREEN_W - 16, DIAG_VAL_H, COL_BG);
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%+d", diagNudge);
+    uiDrawCenteredText(buf, DIAG_VAL_Y, FONT_LARGE, COL_ACCENT);
+}
+
 static void drawAdjusting() {
     TFT_eSPI* tft = uiGetTFT();
     tft->fillScreen(COL_BG);
@@ -59,8 +75,7 @@ static void drawAdjusting() {
     snprintf(buf, sizeof(buf), "Glass %d", diagGlass);
     uiDrawCenteredText(buf, CONTENT_Y + 8, FONT_BODY, COL_TEXT);
 
-    snprintf(buf, sizeof(buf), "%+d", diagNudge);
-    uiDrawCenteredText(buf, CONTENT_Y + 50, FONT_LARGE, COL_ACCENT);
+    drawNudgeValue();
     uiDrawCenteredText("steps", CONTENT_Y + 88, FONT_SMALL, COL_DIM);
 
     uiDrawHint("Nudge to align glass", CONTENT_Y + 115);
@@ -252,18 +267,18 @@ static void diagInput(InputEvent evt) {
 
         case DIAG_ADJUSTING:
             if (evt == INPUT_ENC_CW) {
-                if (diagNudge + DIAG_NUDGE_STEPS > 400) break;
-                nudgeDisc(true, DIAG_NUDGE_STEPS);
-                diagNudge += DIAG_NUDGE_STEPS;
+                if (diagNudge + CAL_NUDGE_STEPS > 400) break;
+                nudgeDisc(true, CAL_NUDGE_STEPS);
+                diagNudge += CAL_NUDGE_STEPS;
                 audioPlayTone(TONE_CLICK);
-                drawAdjusting();
+                drawNudgeValue();
 
             } else if (evt == INPUT_ENC_CCW) {
-                if (diagNudge - DIAG_NUDGE_STEPS < -400) break;
-                nudgeDisc(false, DIAG_NUDGE_STEPS);
-                diagNudge -= DIAG_NUDGE_STEPS;
+                if (diagNudge - CAL_NUDGE_STEPS < -400) break;
+                nudgeDisc(false, CAL_NUDGE_STEPS);
+                diagNudge -= CAL_NUDGE_STEPS;
                 audioPlayTone(TONE_CLICK);
-                drawAdjusting();
+                drawNudgeValue();
 
             } else if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
                 audioPlayTone(TONE_CONFIRM);

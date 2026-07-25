@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.4.0"
+#define FW_VERSION  "1.4.1"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -68,7 +68,26 @@
 #define MOTOR_MIN_SPEED     500     // microsteps/sec at start/end (raised from 400 for torque margin)
 #define MOTOR_ACCEL         1600    // microsteps/sec² — halved from 3200 to reduce lost steps under load
 #define HOMING_SPEED        400     // microsteps/sec — slow for homing
-#define NUDGE_STEPS         10      // microsteps per encoder detent during pour (~2.25°)
+
+// --- Manual nudge (Session 2, v1.4.1) ---
+// Nudges are short bursts from a dead stop, so they get no acceleration ramp.
+// 800 sps (the old value) is above the motor's pull-in rate at rest, which
+// loses the first step or two of every burst. 300 sps sits below pull-in.
+// This is NOT in conflict with the MOTOR_MIN_SPEED >= 400 rule: that rule is
+// about ramped moves, where the disc spends enough time at the start speed to
+// excite low-speed resonance. A 4–10 step burst lasting 13–33 ms is over
+// before resonance can build.
+#define NUDGE_SPEED         300     // microsteps/sec for all manual nudges
+
+// Pour-time nudge (game.cpp / h2h.cpp): coarse and quick, used to slide a
+// glass under the spout mid-pour. 10 microsteps = 2.25° = ~2.8 mm at the
+// 70 mm glass radius.
+#define NUDGE_STEPS         10
+
+// Calibration / diagnostic nudge (screen_calibrate, screen_glass_diag):
+// fine resolution, because these screens MEASURE alignment error rather than
+// just correcting it. 4 microsteps = 0.9° = ~1.1 mm at the glass.
+#define CAL_NUDGE_STEPS     4
 
 // --- Display geometry ---
 #define SCREEN_W        240
