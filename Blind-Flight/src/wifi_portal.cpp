@@ -7,6 +7,8 @@
 #include "device_id.h"
 #include "settings.h"
 #include "transitions.h"
+#include "telemetry.h"
+#include "battery.h"
 #ifndef HEADLESS_BUILD
 #include "screens.h"
 #endif
@@ -1756,6 +1758,55 @@ static void handleConnectTest() {
     webServer.send(302, "text/plain", "");
 }
 
+// GET /log — plain-text telemetry dump (Session 5, v1.5.0).
+//
+// Deliberately self-describing: a pasted log has to stand alone with
+// no other context, because this is also how a beta unit gets triaged
+// remotely. The header carries everything needed to interpret the
+// records below it.
+//
+// Sent with an explicit Content-Length and streamed straight out of
+// the ring — building a String would need a second 16 KB allocation
+// on a device that does not have it to spare.
+static void handleLog() {
+    const char *seg1, *seg2;
+    size_t len1, len2;
+    telemetrySegments(&seg1, &len1, &seg2, &len2);
+
+    char header[512];
+    int h = snprintf(header, sizeof(header),
+        "# Blind Flight telemetry\n"
+        "# fw=%s device=%s run=%lu\n"
+        "# uptime_ms=%lu batt_mv=%d batt_pct=%d heap=%lu\n"
+        "# net=%s ip=%s clients=%d\n"
+        "# ring=%d written=%lu wrapped=%d\n"
+        "#\n"
+        "# H,run,ms,mV,magnetWidth,attempt,failPhase\n"
+        "#   failPhase: 0=ok 1=stuck-on-magnet 2=not-found 3=too-wide\n"
+        "# X,run,ms,mV,glass,crossIdx,expected,actual,drift\n"
+        "#   drift = actual - expected steps to the Hall leading edge\n"
+        "# M,run,ms,mV,from,to,dir,steps\n"
+        "#\n",
+        FW_VERSION, deviceGetSerial(), (unsigned long)telemetryGetRunId(),
+        (unsigned long)millis(),
+        (int)(batteryGetVoltage() * 1000.0f + 0.5f), batteryGetPercent(),
+        (unsigned long)ESP.getFreeHeap(),
+        staMode ? "STA" : "AP", wifiGetIP().c_str(), wifiPortalGetClientCount(),
+        TELEM_RING_BYTES, (unsigned long)telemetryGetBytesWritten(),
+        telemetryHasWrapped() ? 1 : 0);
+
+    // snprintf reports the length it WANTED; on truncation the buffer
+    // holds sizeof-1 bytes plus the terminator.
+    if (h < 0) h = 0;
+    if (h > (int)sizeof(header) - 1) h = (int)sizeof(header) - 1;
+
+    webServer.setContentLength((size_t)h + len1 + len2);
+    webServer.send(200, "text/plain", "");
+    webServer.sendContent(header, (size_t)h);
+    if (len1) webServer.sendContent(seg1, len1);
+    if (len2) webServer.sendContent(seg2, len2);
+}
+
 static void handleNotFound() {
     if (staMode) {
         webServer.send(404, "text/plain", "Not Found");
@@ -1828,6 +1879,7 @@ void wifiPortalInit() {
 
     // --- Web server routes ---
     webServer.on("/", handleRoot);
+    webServer.on("/log", handleLog);
     webServer.on("/generate_204", handleGenerate204);
     webServer.on("/hotspot-detect.html", handleHotspotDetect);
     webServer.on("/connecttest.txt", handleConnectTest);

@@ -23,13 +23,24 @@
 
 #include <Arduino.h>
 
+// Homing failure phases, reported in the telemetry H record.
+#define HOME_FAIL_NONE              0
+#define HOME_FAIL_STUCK_ON_MAGNET   1   // Phase 1: never left the magnet
+#define HOME_FAIL_MAGNET_NOT_FOUND  2   // Phase 2: no leading edge in 1.5 rev
+#define HOME_FAIL_MAGNET_TOO_WIDE   3   // Phase 3: no trailing edge within 90°
+
 void motorInit();
 
 // Home the disc — scans for Hall sensor, finds both edges of the
 // magnet, and centers on the midpoint. Self-calibrates for magnet
 // width, eliminating per-unit HOME_OFFSET tuning.
 // Returns true if home found, false on timeout.
-bool motorHome();
+//
+// `attempt` is the 0-based retry index within one runHomingSequence()
+// call. It is recorded in telemetry and has no effect on behaviour —
+// retry policy lives in the caller, which differs between the screen
+// and headless builds.
+bool motorHome(int attempt = 0);
 
 // Move to absolute position (0 = home center, in microsteps).
 // Automatically picks shortest rotation direction.
@@ -96,9 +107,15 @@ int motorGetExtraRevs();
 // Returns the drift (in microsteps) detected on the last verified spin.
 // Positive = motor was behind tracked position (took more steps to reach sensor).
 // Negative = motor was ahead. 0 = no drift or no spin since boot.
-// Only updates when a spin (motorSpinToGlass) actually crosses the home
-// magnet — otherwise retains its last value.
+// Reset to 0 at the start of every verified move, so a spin that never
+// crossed the magnet reports 0 rather than the previous spin's value.
 int motorGetLastDrift();
+
+// True if the most recent verified move actually saw a Hall crossing.
+// Distinguishes "measured, drift happened to be zero" from "measured
+// nothing" — which motorGetLastDrift() alone cannot express, and which
+// the closed-loop correction in Session 6 needs.
+bool motorGetLastDriftValid();
 
 // Returns the magnet width (in microsteps) measured during the last
 // successful homing sequence. 0 if never homed.

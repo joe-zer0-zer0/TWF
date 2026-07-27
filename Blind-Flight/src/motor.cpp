@@ -1,5 +1,6 @@
 #include "motor.h"
 #include "config.h"
+#include "telemetry.h"
 
 // ============================================================
 // Blind Flight — Motor Module (Session 18)
@@ -41,7 +42,8 @@ static int pourSideValue = 0;    // cached side (0–3)
 static int homeOffsetValue = 0;  // cached trim (microsteps)
 
 // Diagnostics
-static int lastDrift       = 0;   // drift (microsteps) from last verified spin
+static int  lastDrift      = 0;   // drift (microsteps) from last verified spin
+static bool lastDriftValid = false; // did THIS spin actually measure a crossing?
 static int lastMagnetWidth = 0;   // magnet width from last homing
 
 // Driver enable state (Session 2 / v1.4.1)
@@ -136,11 +138,33 @@ static int moveSteps(int steps, bool clockwise) {
 //
 // Verification only happens if: homed, a magnet width was recorded,
 // the move is clockwise, and the move is long enough to reach the
-// first crossing. Otherwise this behaves exactly like moveSteps()
-// and lastDrift is left unchanged from the previous verified spin.
+// first crossing.
+//
+// Session 5 (v1.5.0) changes:
+//   - lastDrift is reset to 0 at the top of every call, and
+//     lastDriftValid says whether THIS move measured anything. The
+//     old code left the previous spin's drift in place, so a spin
+//     that never crossed the magnet silently re-applied a stale
+//     correction in motorSpinToGlass().
+//   - Every crossing is recorded, not just the first. With 1–3 extra
+//     revolutions that is 2–4 samples per spin, which is what
+//     distinguishes error that accumulates during the spin from
+//     error that arrives all at once.
+//   - lastDrift keeps its old meaning (first crossing). Moving it to
+//     the last crossing changes where the disc ends up and belongs to
+//     Session 6, not here.
 // ============================================================
-static int moveStepsVerified(int steps, bool clockwise, int maxSpeed, int startPosNorm) {
+
+// Crossings recorded per move. A spin is at most ~4 revolutions, so
+// anything beyond this is Hall noise; the overflow count is logged.
+#define MAX_CROSSINGS_PER_MOVE  8
+
+static int moveStepsVerified(int steps, bool clockwise, int maxSpeed,
+                             int startPosNorm, int contextGlass) {
     if (steps <= 0) return 0;
+
+    lastDrift      = 0;
+    lastDriftValid = false;
 
     bool canVerify = homed && lastMagnetWidth > 0 && clockwise;
     int expectedStepsToTrigger = -1;
@@ -151,7 +175,12 @@ static int moveStepsVerified(int steps, bool clockwise, int maxSpeed, int startP
     }
 
     bool prevHallLow = (digitalRead(PIN_HALL) == LOW);
-    bool triggered = false;
+
+    // Crossings are buffered here and flushed after the move. Logging
+    // from inside the step loop would stretch the step interval and
+    // cost steps.
+    int crossSteps[MAX_CROSSINGS_PER_MOVE];
+    int crossCount = 0;
 
     motorEnable();
     digitalWrite(PIN_MOTOR_DIR, clockwise ? MOTOR_CW_DIR : MOTOR_CCW_DIR);
@@ -176,12 +205,13 @@ static int moveStepsVerified(int steps, bool clockwise, int maxSpeed, int startP
     for (int i = 0; i < steps; i++) {
         stepMotor();
 
-        if (canVerify && !triggered) {
+        if (canVerify) {
             bool hallLow = (digitalRead(PIN_HALL) == LOW);
             if (hallLow && !prevHallLow) {
-                int actualStepsToTrigger = i + 1;
-                lastDrift = actualStepsToTrigger - expectedStepsToTrigger;
-                triggered = true;
+                if (crossCount < MAX_CROSSINGS_PER_MOVE) {
+                    crossSteps[crossCount] = i + 1;
+                }
+                crossCount++;
             }
             prevHallLow = hallLow;
         }
@@ -204,6 +234,27 @@ static int moveStepsVerified(int steps, bool clockwise, int maxSpeed, int startP
         delayMicroseconds(stepDelay);
 
         if ((i & 0xFF) == 0) yield();
+    }
+
+    // --- Flush crossings to telemetry ---
+    // Crossing k sits one full revolution further along than crossing
+    // k-1, so its expected step count grows by MICROSTEPS_PER_REV.
+    if (canVerify) {
+        int logged = (crossCount < MAX_CROSSINGS_PER_MOVE)
+                     ? crossCount : MAX_CROSSINGS_PER_MOVE;
+        for (int k = 0; k < logged; k++) {
+            int expected = expectedStepsToTrigger + k * MICROSTEPS_PER_REV;
+            int drift    = crossSteps[k] - expected;
+            telemetryLogCrossing(contextGlass, k, expected, crossSteps[k], drift);
+            if (k == 0) {
+                lastDrift      = drift;
+                lastDriftValid = true;
+            }
+        }
+        if (crossCount > logged) {
+            telemetryPrintf("# WARN %d Hall crossings in one move, logged %d",
+                            crossCount, logged);
+        }
     }
 
     return steps;
@@ -236,7 +287,7 @@ void motorInit() {
 // Sets position 0 at the magnet center.
 // ============================================================
 
-bool motorHome() {
+bool motorHome(int attempt) {
     motorEnable();
 
     // --- Phase 1: If sitting on magnet, move off ---
@@ -252,6 +303,7 @@ bool motorHome() {
         // If still on magnet after a full glass worth of steps, bail
         if (digitalRead(PIN_HALL) == LOW) {
             Serial.println("[Motor] Homing FAIL: couldn't move off magnet");
+            telemetryLogHoming(0, attempt, HOME_FAIL_STUCK_ON_MAGNET);
             return false;
         }
     }
@@ -274,6 +326,7 @@ bool motorHome() {
 
     if (!found) {
         Serial.println("[Motor] Homing FAIL: magnet not found in 1.5 revolutions");
+        telemetryLogHoming(0, attempt, HOME_FAIL_MAGNET_NOT_FOUND);
         return false;
     }
 
@@ -296,6 +349,7 @@ bool motorHome() {
         // Magnet wider than 90° — something is wrong
         Serial.printf("[Motor] Homing FAIL: magnet wider than %d steps\n",
                       MICROSTEPS_PER_GLASS);
+        telemetryLogHoming(magnetWidth, attempt, HOME_FAIL_MAGNET_TOO_WIDE);
         return false;
     }
 
@@ -314,6 +368,7 @@ bool motorHome() {
 
     Serial.printf("[Motor] Homed: magnet width=%d steps (%.1f°), centered (backed %d)\n",
                   magnetWidth, magnetWidth * 360.0f / MICROSTEPS_PER_REV, centerSteps);
+    telemetryLogHoming(magnetWidth, attempt, HOME_FAIL_NONE);
 
     return true;
 }
@@ -345,6 +400,11 @@ void motorMoveToPosition(int targetPos) {
 
     Serial.printf("[Motor] MoveToPos: cur=%d target=%d steps=%d dir=%s\n",
                   currentNorm, targetPos, stepsToMove, clockwise ? "CW" : "CCW");
+
+    // Logged even for a zero-step move: the M records are what expose
+    // direction reversals across a pour sequence, and a no-op move
+    // still marks where in the sequence we are.
+    telemetryLogMove(currentNorm, targetPos, clockwise, stepsToMove);
 
     if (stepsToMove == 0) return;
 
@@ -385,8 +445,12 @@ void motorSpinToGlass(int glass, int extraRevolutions) {
     // Add extra full revolutions for theatrics / unpredictability
     int totalSteps = cwDist + extraRevolutions * MICROSTEPS_PER_REV;
 
+    telemetryLogMove(currentNorm, targetPos, true, totalSteps);
+
     motorEnable();
-    moveStepsVerified(totalSteps, true, runtimeMaxSpeed, currentNorm);  // always clockwise, runtime speed
+    // Always clockwise, runtime speed. Crossing records are emitted
+    // from inside, tagged with this glass number.
+    moveStepsVerified(totalSteps, true, runtimeMaxSpeed, currentNorm, glass);
     currentMotorPos = targetPos;
 
     // Closed-loop drift correction: if the Hall sensor detected drift
@@ -404,6 +468,9 @@ void motorSpinToGlass(int glass, int extraRevolutions) {
 
 void motorSpinSteps(int steps) {
     if (steps <= 0) return;
+    telemetryLogMove(currentMotorPos % MICROSTEPS_PER_REV,
+                     (currentMotorPos + steps) % MICROSTEPS_PER_REV,
+                     true, steps);
     motorEnable();
     moveSteps(steps, true, runtimeMaxSpeed);         // always clockwise, runtime speed
     currentMotorPos = (currentMotorPos + steps) % MICROSTEPS_PER_REV;
@@ -490,9 +557,14 @@ int motorGetExtraRevs() {
 
 int motorGetLastDrift() {
     // Set by moveStepsVerified() during motorSpinToGlass (Session 19).
-    // Stays at its last value if the most recent spin didn't cross the
-    // home magnet (e.g. not yet homed, or a very short move).
+    // Session 5: reset to 0 at the start of every verified move, so a
+    // spin that never crossed the magnet reports 0 rather than the
+    // previous spin's number.
     return lastDrift;
+}
+
+bool motorGetLastDriftValid() {
+    return lastDriftValid;
 }
 
 int motorGetLastMagnetWidth() {

@@ -13,6 +13,7 @@
 #include "favorites.h"
 #include "ota.h"
 #include "device_id.h"
+#include "telemetry.h"
 
 #ifndef HEADLESS_BUILD
 #include <TFT_eSPI.h>
@@ -39,6 +40,7 @@ void setup() {
     settingsInit();
     favoritesInit();
     batteryInit();
+    telemetryInit();   // after batteryInit — every record carries battery mV
     persistInit();
     diagInit();
 

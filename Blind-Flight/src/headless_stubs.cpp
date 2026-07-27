@@ -102,7 +102,7 @@ bool runHomingSequence() {
     const int MAX_RETRIES = 3;
     for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
         Serial.printf("[Headless] Homing attempt %d/%d\n", attempt + 1, MAX_RETRIES);
-        if (motorHome()) {
+        if (motorHome(attempt)) {
             audioPlayTone(TONE_HOME_FOUND);
             Serial.println("[Headless] Homing succeeded");
             return true;

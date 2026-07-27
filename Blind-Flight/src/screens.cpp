@@ -281,6 +281,7 @@ const Screen screenDetail = {
 
 bool runHomingSequence() {
     TFT_eSPI* tft = uiGetTFT();
+    int attempt = 0;   // recorded in telemetry; user-driven retries are unbounded
 
     while (true) {
         tft->fillScreen(COL_BG);
@@ -296,7 +297,8 @@ bool runHomingSequence() {
         }
 
         Serial.println("[Homing] Starting...");
-        bool found = motorHome();
+        bool found = motorHome(attempt);
+        attempt++;
 
         if (found) {
             Serial.println("[Homing] Home found!");

@@ -5,8 +5,9 @@
 **Baseline:** v1.3.10 (`4fcae04`)
 **Status:** Session 1 complete (v1.4.0, `54b8e30`). Session 2 complete (v1.4.1).
 7b complete (v1.4.2/v1.4.3). 7j complete (already guarded in `ui.cpp`).
-**Next: Session 5 (telemetry core).** See "Revised Execution Order" below — the
-original 3-before-5 ordering assumed a serial capture path that does not exist.
+Session 5 complete (v1.5.0) — `/log` is live; the roadmap now has a capture path.
+**Next: Session 9 (diagnostics consolidation + auto self-test → baseline data).**
+Session 3 must not start until that baseline is captured and archived.
 
 ---
 
@@ -751,11 +752,41 @@ set and apply to both. Recommend `Fast / Normal / Gentle`.
 
 ---
 
-### Session 5 — Telemetry core (**RUN FIRST**)
+### Session 5 — Telemetry core — **DONE (v1.5.0)**
 
 **Priority:** P0. Nothing downstream is measurable without it.
 **Model:** Sonnet 5 — self-contained, no motion-geometry reasoning.
 **Target version:** 1.5.0
+
+**Deviations from the spec as written, and why:**
+
+- **`/log.csv` was not built.** Every non-record line the ring holds is
+  `#`-prefixed by convention, and so is the whole `/log` header, so a parser
+  that drops `#` lines already gets clean CSV out of `/log`. A second route
+  would have been a second thing to keep in sync for no new information.
+- **`lastDrift` still means the *first* crossing.** The spec's reset-to-zero
+  and `triggered` flag both shipped (`motorGetLastDriftValid()`), so a spin
+  that measures nothing no longer re-applies the previous spin's correction.
+  But moving `lastDrift` to the *last* crossing changes where the disc
+  physically ends up, and Session 5 is explicitly measurement-only. Session 6
+  owns that change.
+- **The run ID is a monotonic NVS boot counter, not a random per-boot value.**
+  One NVS write per boot is negligible wear, and ordering matters when several
+  captures from different power cycles are pasted together.
+- **`motorHome()` gained a defaulted `attempt` parameter** rather than a
+  module-level retry counter. Retry policy differs between the two
+  `runHomingSequence()` implementations (screen build prompts and retries
+  forever; headless auto-retries 3×), so the caller owns the count and passes
+  it in. Existing call sites did not have to change.
+- **`M` records are written *before* the move, not after**, so the timestamp is
+  the move's start and the `X` records produced by that move follow it in
+  reading order. Zero-step moves are logged too — a no-op still marks position
+  in the sequence.
+- **No clear-log route.** Records carry the run ID and uptime, so isolating one
+  capture is a filtering problem, not a firmware one.
+
+**Cost:** 16 KB static RAM for the ring. Post-change usage is 22.2% (`esp32`)
+and 20.7% (`esp32-headless`).
 
 Measurement only — no corrective action. Goal is hard data on whether lash,
 elastic wind-up, or step loss dominates on any given mechanical build.
