@@ -90,9 +90,9 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 
 **Firmware**
 
-* **Blocking motor loops freeze WebSocket/HTTP/DNS** — long spins disconnect phones. Known, unresolved; handle eventually.
-* **`buildStateJSON` buffer bounds need guarding** — flagged, not yet fixed.
-* **Screen state machine:** never nest `uiPushScreenT` calls during transitions (corrupts state). Established pattern: deferred flags (`pendingBrowse`, `awaitingBrowseReturn`, `phoneNameReady`) push actions out of `onEnter` into the next draw loop.
+* **Blocking motor loops freeze WebSocket/HTTP/DNS** — the step loops themselves are still unserviced (Session 8 owns that). As of v1.5.2 the *surrounding* blocking waits — `delayWithAudio`, the homing wait loops, the battery-lockout modal — call `wifiPortalService()`, so a phone survives the pauses between spins. **Call `wifiPortalService()`, never `wifiPortalUpdate()`, from inside a blocking loop:** `wifiPortalUpdate()` pushes and pops screens for the pending-`wifi_connect` flow, and doing that mid-operation corrupts the screen stack (see next bullet). Never call either from inside a step loop — it takes milliseconds and would drop steps.
+* **JSON builders in `wifi_portal.cpp`:** use the `jsonAppend` / `jsonAppendChar` / `jsonAppendEscaped` helpers, not raw `snprintf(buf + pos, sizeof(buf) - pos, ...)`. `sizeof()` is `size_t`, so that subtraction underflows to ~4 billion once `pos` passes the buffer length and writes off the end of a stack buffer (fixed in v1.5.2). Anything phone-supplied — player names, SSIDs, favorites — must go through `jsonAppendEscaped`. (`buildStateJSON` uses its own equivalent `JSON_PUT`/`JSON_REM` macros and is already safe.)
+* **Screen state machine:** never nest `uiPushScreenT`/`uiPopScreenT` calls during transitions (corrupts state) — this includes calling them from `onEnter`. Established pattern: deferred flags (`pendingBrowse`, `awaitingBrowseReturn`, `phoneNameReady`, `pendingStart`/`pendingExit`) push actions out of `onEnter` into the next draw loop. Blocking work that draws its own full-screen UI (homing) belongs there too, not in `onEnter`.
 * **`config.h` truncation** was a recurring failure mode with file downloads — verify the file ends at the expected final `#define`. (Less relevant in Claude Code, but keep the habit of sanity-checking file integrity after large edits.)
 * Microstepping: firmware constants assume **8×** (1600/rev). If motion lands wrong (e.g., alternating between two positions), suspect a wrong microstepping constant.
 
