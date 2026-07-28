@@ -68,6 +68,9 @@ extern const Screen screenH2H;
 // ============================================================
 
 bool        h2hIsActive();
+
+// See gameInvalidateHoming() — same fix, same reason (item 7k).
+void        h2hInvalidateHoming();
 H2HPhase    h2hGetPhase();
 H2HSubMode  h2hGetSubMode();
 

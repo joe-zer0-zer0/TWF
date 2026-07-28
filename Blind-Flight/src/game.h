@@ -188,6 +188,17 @@ void gamePhoneChallengeSelect(int glassNum);
 // Challenge: confirm guess during CHALLENGE_GUESS
 void gamePhoneChallengeConfirm();
 
+// Forget that this flight has been homed, so the next runPourCycle()
+// homes again before it moves anything (item 7k).
+//
+// Call this whenever the motor driver is disabled while a flight is in
+// progress. A de-energised disc can be turned by hand, and the design
+// only claims a verified position because homing re-establishes one on
+// every recovery — but runPourCycle() homes on the FIRST pour only, so
+// without this the remaining pours run on a position the firmware
+// believes and has not checked.
+void gameInvalidateHoming();
+
 // Resume a saved session (called from persist module on boot)
 void gameResumeSession(GameMode mode, GameState resumeState,
                        int glassCount, const GameSession& saved);

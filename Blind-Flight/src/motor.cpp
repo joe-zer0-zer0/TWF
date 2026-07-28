@@ -570,3 +570,91 @@ bool motorGetLastDriftValid() {
 int motorGetLastMagnetWidth() {
     return lastMagnetWidth;
 }
+
+// ============================================================
+// Characterisation traverse (Session 9)
+// ============================================================
+// See motor.h for the rationale. Structurally this is motorHome()
+// Phases 1–3 with debounced edges and without the Phase 4 reversal,
+// counting every step from the start so the centre crossing can be
+// expressed as a distance rather than an absolute.
+// ============================================================
+
+bool motorMeasureHomeCW(int* stepsToCentre, int* magnetWidth) {
+    motorEnable();
+    digitalWrite(PIN_MOTOR_DIR, MOTOR_CW_DIR);
+    delayMicroseconds(10);
+
+    const unsigned long stepDelay = 1000000UL / HOMING_SPEED;
+
+    // Two revolutions. One is enough from any position off the magnet;
+    // the second covers the case where the disc starts sitting on it and
+    // the usable leading edge is a full turn away.
+    const int budget = 2 * MICROSTEPS_PER_REV;
+
+    // Starting on the magnet makes the edge in front of us a trailing
+    // edge, which is not the one we can measure a width from. Walk off
+    // it first — the steps still count, so the arithmetic is unaffected.
+    bool waitingToLeave = (digitalRead(PIN_HALL) == LOW);
+
+    int taken    = 0;
+    int leading  = -1;
+    int trailing = -1;
+    int run      = 0;   // consecutive samples in the state we're waiting for
+
+    while (taken < budget) {
+        stepMotor();
+        taken++;
+        delayMicroseconds(stepDelay);
+        if ((taken & 0xFF) == 0) yield();
+
+        bool low = (digitalRead(PIN_HALL) == LOW);
+
+        if (waitingToLeave) {
+            run = low ? 0 : run + 1;
+            if (run >= MEASURE_EDGE_DEBOUNCE) { waitingToLeave = false; run = 0; }
+            continue;
+        }
+
+        if (leading < 0) {
+            run = low ? run + 1 : 0;
+            if (run >= MEASURE_EDGE_DEBOUNCE) {
+                // The first LOW of the accepted run is the real edge.
+                leading = taken - MEASURE_EDGE_DEBOUNCE + 1;
+                run = 0;
+            }
+            continue;
+        }
+
+        run = low ? 0 : run + 1;
+        if (run >= MEASURE_EDGE_DEBOUNCE) {
+            trailing = taken - MEASURE_EDGE_DEBOUNCE + 1;
+            break;
+        }
+    }
+
+    if (leading < 0 || trailing < 0) {
+        telemetryPrintf("# MEASURE fail: steps=%d leading=%d trailing=%d",
+                        taken, leading, trailing);
+        return false;
+    }
+
+    int width = trailing - leading;
+    if (width < MEASURE_MIN_WIDTH) {
+        telemetryPrintf("# MEASURE fail: width=%d below %d (noise edge?)",
+                        width, MEASURE_MIN_WIDTH);
+        return false;
+    }
+
+    // The disc was at position 0 after `centre` steps. It has since
+    // travelled to `taken`, so it now sits (taken - centre) CW of home.
+    int centre = leading + width / 2;
+    currentMotorPos = ((taken - centre) % MICROSTEPS_PER_REV
+                       + MICROSTEPS_PER_REV) % MICROSTEPS_PER_REV;
+    homed = true;
+    lastMagnetWidth = width;
+
+    if (stepsToCentre) *stepsToCentre = centre;
+    if (magnetWidth)   *magnetWidth   = width;
+    return true;
+}

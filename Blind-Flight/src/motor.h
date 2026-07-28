@@ -120,3 +120,41 @@ bool motorGetLastDriftValid();
 // Returns the magnet width (in microsteps) measured during the last
 // successful homing sequence. 0 if never homed.
 int motorGetLastMagnetWidth();
+
+// --- Session 9: characterisation primitive ---
+
+// Step CW from wherever the disc is until the magnet has been crossed
+// completely, and report how far the magnet's CENTRE was from the start.
+//
+// This is the strongest position measurement the hardware offers, because
+// the magnet is embedded in the DISC, not on the motor shaft — so the Hall
+// sensor reports true disc angle with all lash and hub wind-up included.
+// Every other signal reports where the firmware believes the shaft to be.
+//
+// Deliberately CW-only and never returns to the centre: reversing to sit on
+// home would inject a direction change, and lash is exactly the quantity
+// under measurement. Both edges are debounced (MEASURE_EDGE_DEBOUNCE
+// consecutive samples) and the centre is taken as the midpoint, because a
+// single-edge reading carries Hall hysteresis and magnet asymmetry.
+//
+// Note for interpreting results: the traverse starts from a dead stop, so
+// the count also contains the post-stop deadband — the shaft has to re-cross
+// the hub play before the disc follows. That is intentional. It is a common-
+// mode term the acceptance criteria leave unconstrained, and its variation
+// is one of the things the self-test exists to measure.
+//
+// On success, tracked position is updated to where the disc ACTUALLY is
+// (derived from the centre crossing), homed is set, and the magnet width is
+// recorded — so a caller can carry on with normal moves afterwards. On
+// failure (no complete magnet inside the step budget, or an implausibly
+// narrow one) position tracking is left untouched and false is returned.
+//
+// stepsToCentre / magnetWidth may be null.
+bool motorMeasureHomeCW(int* stepsToCentre, int* magnetWidth);
+
+// Consecutive same-state Hall samples required to accept an edge.
+#define MEASURE_EDGE_DEBOUNCE   3
+
+// Widths below this are rejected as a noise-triggered false edge rather
+// than a real magnet. The real magnet reads ~30–60 microsteps.
+#define MEASURE_MIN_WIDTH       8

@@ -126,6 +126,15 @@ void telemetryLogMove(int fromPos, int toPos, bool clockwise, int steps) {
                     fromPos, toPos, clockwise ? "CW" : "CCW", steps);
 }
 
+void telemetryLogSelfTest(int pass, int order, int visit, int glass,
+                          int predicted, int measured, int err,
+                          int magnetWidth, bool ok) {
+    telemetryPrintf("S,%lu,%lu,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                    (unsigned long)sRunId, (unsigned long)millis(), battMv(),
+                    pass, order, visit, glass,
+                    predicted, measured, err, magnetWidth, ok ? 1 : 0);
+}
+
 // ============================================================
 // Init / accessors
 // ============================================================

@@ -224,6 +224,14 @@ void uiUpdate() {
         if (idleMs >= (unsigned long)offDelay * 1000UL) {
             setBacklight(0);
             motorDisable();
+            // Item 7k. The disc is now free to be turned by hand. If a
+            // flight is mid-sequence its tracked position is no longer
+            // trustworthy, and nothing else re-establishes one — so mark
+            // it unverified and let the next pour cycle re-home. Costs
+            // one extra homing per idle event and holds no current,
+            // which is exactly the stated recovery model.
+            gameInvalidateHoming();
+            h2hInvalidateHoming();
             idleState = IDLE_OFF;
         }
     }
@@ -240,8 +248,12 @@ void uiUpdate() {
 
             if (wasOff) {
                 // A flight already in progress may have glasses loaded on the
-                // disc — don't spin the carousel on a bare wake-up press. The
-                // next runPourCycle() re-homes on its own via homedThisFlight.
+                // disc — don't spin the carousel on a bare wake-up press.
+                // The re-home still happens, just later: idle-off cleared
+                // homedThisFlight above, so the next runPourCycle() homes
+                // before it moves anything. (That was not true before item
+                // 7k; the flag stayed set from pour 1 onward and the rest of
+                // the flight ran on an unverified position.)
                 if (!gameIsActive() && !h2hIsActive()) {
                     runHomingSequence();
                 }

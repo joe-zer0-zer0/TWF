@@ -6,7 +6,8 @@
 **Status:** Session 1 complete (v1.4.0, `54b8e30`). Session 2 complete (v1.4.1).
 7b complete (v1.4.2/v1.4.3). 7j complete (already guarded in `ui.cpp`).
 Session 5 complete (v1.5.0) — `/log` is live; the roadmap now has a capture path.
-**Next: Session 9 (diagnostics consolidation + auto self-test → baseline data).**
+Session 9 shipped (v1.5.1) — diagnostics consolidated, auto self-test built, 7k fixed.
+**Next: run the self-test and archive the baseline capture.**
 Session 3 must not start until that baseline is captured and archived.
 
 ---
@@ -1095,7 +1096,80 @@ Session 8 ahead of Session 6 on the headless track.
 
 ---
 
-### Session 9 — Diagnostics consolidation + auto self-test *(new, 2026-07-26)*
+### Session 9 — Diagnostics consolidation + auto self-test — **BUILT (v1.5.1)**
+
+**Deliverable is not complete until the baseline capture exists.** The firmware
+shipped; the *data* is the artefact this session owes the roadmap. Run the
+self-test and archive `/log` before Session 3 starts.
+
+**Deviations from the spec as written, and why:**
+
+- **The run has two phases, not one.** The spec asked for randomised and
+  sequential visit orders, reported per-position and per-visit-index, so that
+  "position 4 is worst" and "last-visited is worst" could be told apart. As
+  specified that cannot work: **a measurement cannot be taken without traversing
+  to the magnet, and that traverse re-anchors the tracked position exactly.** A
+  routine that reads every position in turn therefore destroys accumulated error
+  as it goes and can never observe accumulation, whatever order it visits in.
+  Worse, after a traverse the disc always sits just past the magnet — so every
+  position is always approached over the same distance in the same direction,
+  and randomising the order changes nothing at all.
+
+  What shipped instead:
+  - **Phase A (isolated), 5 passes.** Move to a position, measure, repeat.
+    Each reading is one move from a freshly anchored zero. Gives per-position
+    bias and, across passes, per-position scatter — the two acceptance numbers.
+    Passes alternate sequential and randomised; under the reasoning above those
+    should agree, so the randomised passes are a **control on the re-anchoring
+    assumption**, not new data. If they disagree, the reasoning is wrong and
+    that is worth knowing before Session 3.
+  - **Phase B (chain), 4 passes.** Home, walk all four positions in a random
+    order with **no measurement in between** — exactly what a flight does — and
+    measure only the final position. The final position rotates so each gets a
+    turn arriving last.
+
+  `chainErr[p] − mean(pos[p])` is then the error accumulated over the three
+  preceding moves. Near zero ⇒ per-position geometry, and Session 10's
+  calibration table is the fix. Large ⇒ accumulation, and Sessions 3/4 are.
+  Reported on-screen as `Accum` and in the log as the `accum` column.
+
+- **Run time is about two minutes**, not the "several revolutions" the spec
+  implied. 9 passes at HOMING_SPEED. The traverse speed was deliberately left at
+  400 sps to match `motorHome()`, so widths and counts are comparable with the
+  `H` records.
+
+- **The measurement includes the post-stop deadband, on purpose.** The traverse
+  starts from a dead stop, so the shaft re-crosses the hub play before the disc
+  follows and those steps are counted as travel. That is a common-mode term the
+  acceptance criteria leave unconstrained, and its *variation* is one of the
+  things being measured (Corrected Fact #9). Session 4 should show up here as a
+  shift in the means.
+
+- **Magnet-edge debounce differs from `motorHome()`.** The traverse requires 3
+  consecutive samples at each edge (the Session 3 item-5 hardening, applied
+  early here); `motorHome()` still accepts a single sample. Widths from `S`
+  records may therefore read a few microsteps narrower than widths from `H`
+  records taken on the same disc. Do not treat a small difference as drift.
+
+- **HW Diag is exempt from home-on-entry.** Motor Test now homes on entry (via a
+  deferred flag, not in `onEnter`) and Glass Diag always did. HW Diag does not,
+  and must not: its Hall page is the tool you reach for when the Hall sensor is
+  the suspect, and on the screen build `runHomingSequence()` **retries forever
+  with no way out**. Gating HW Diag behind it would make a dead sensor
+  unrecoverable from the UI. Worth revisiting if `runHomingSequence()` ever
+  grows an abort path.
+
+- **A phone-triggered run does not take over the device screen.** The progress
+  hook is registered by the Auto Diag screen, so a run started from the phone
+  leaves the TFT on whatever screen was showing. Harmless, and the phone shows
+  full progress; noted so it is not reported as a bug.
+
+- **7k rode along as specified** — `gameInvalidateHoming()` / `h2hInvalidateHoming()`
+  called from the idle-off path in `ui.cpp`, and the comment at `ui.cpp:244`
+  that asserted the re-home already happened is corrected.
+
+- **`/log` header buffer grew 512 → 1024 B.** The `S` record legend pushed the
+  old one past truncation.
 
 **Priority:** P0. Produces the baseline every later session is measured against.
 **Model:** Sonnet 5 — UI restructuring plus a well-specified measurement routine.

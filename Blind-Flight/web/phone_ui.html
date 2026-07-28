@@ -104,6 +104,7 @@ var authed=false,pendPin='';
 var h2hSetup=null;
 var SET=null,sOpen=false;
 var gpMode=null,gpGc=0;
+var dgAsk=false;
 function doAuth(){
 var p=$('pp');if(!p)return;
 var v=p.value.trim();if(v.length!==4){$('pe').textContent='Enter 4 digits';$('pe').style.display='';return;}
@@ -146,6 +147,7 @@ if(d.t==='h2h_you'){HY=d;lk=false;rh();return;}
 if(d.t==='h2h_result'){HR=d;lk=false;rh();return;}
 if(d.t==='h2h_err'){lk=false;return;}
 if(d.t==='wifi_nets'){wNets=d.nets;lk=false;rwifi();return;}
+if(d.t==='dg_busy'){lk=false;dgAsk=false;rn();return;}
 if(d.t==='wifi_status'){lk=false;
 if(d.ok){wMsg='Connected! IP: '+d.ip;wSta=true;}
 else{wMsg='Connection failed';}
@@ -167,6 +169,26 @@ function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent
 function rn(){
 var v=$('v');
 if(!S){v.innerHTML='<div class="msg">Connecting to device...</div>';return;}
+// Alignment self-test: the device blocks for about two minutes while the
+// carousel runs. The socket stays open (the server has no heartbeat, so
+// nothing times it out) but nothing is serviced, so every control here
+// has to be suspended — a tap would either be swallowed or arrive
+// minutes late.
+if(S.dg){
+var ord=S.dgo===2?'Chain pass — no reading':S.dgo===1?'Randomised order':'Sequential order';
+v.innerHTML='<div class="st">Diagnostic Test</div>'+
+'<div class="msg">The device will not respond<br>until the sequence completes.</div>'+
+'<div class="big">'+(S.dgg||'-')+'</div>'+
+'<div class="hint">position</div>'+
+'<div class="msg">Pass '+(S.dgp||0)+' of '+(S.dgt||0)+'</div>'+
+'<div class="hint">'+ord+'</div>'+
+'<div class="hint" style="margin-top:14px">Keep hands clear of the disc</div>'+
+'<button class="btn bd" onclick="txf({a:\'selftest_stop\'})">Stop Test</button>';
+$('fc').style.display='none';
+var wc0=$('wc');if(wc0)wc0.style.display='none';
+$('sc').style.display='none';
+return;
+}
 if(S.a&&S.sp){
 v.innerHTML='<div class="st">Spinning...</div>'+
 '<div class="msg">Selecting a glass</div>'+
@@ -176,6 +198,18 @@ return;
 if(!S.a){
 if(gpMode){rgpick();return;}
 if(h2hSetup){rh2hSetup();return;}
+if(dgAsk){
+v.innerHTML='<div class="st">Alignment Self-Test</div>'+
+'<div class="msg" style="color:#F44336">Remove all glasses first</div>'+
+'<div class="hint">Measures the position error at each glass against the home magnet. Many revolutions, about 2 minutes, and the device stops responding for the duration.</div>'+
+'<div class="hint" style="margin-top:10px">Results land in the log at /log</div>'+
+'<button class="btn bp" onclick="dgGo()">Glasses Are Off — Start</button>'+
+'<button class="btn bs" onclick="dgAsk=false;rn()">Cancel</button>';
+$('fc').style.display='none';
+var wc1=$('wc');if(wc1)wc1.style.display='none';
+$('sc').style.display='none';
+return;
+}
 v.innerHTML='<div class="st">Ready</div>'+
 '<div class="msg">Start a flight</div>'+
 '<button class="btn bp" onclick="gpick(\'B\')">Basic Flight</button>'+
@@ -188,6 +222,8 @@ v.innerHTML='<div class="st">Ready</div>'+
 '<button class="btn bp" onclick="tx({a:\'start\',v:\'Y\'})">Find the Ringer (Decoy)</button>'+
 '<hr class="sep"><div class="slbl">Multiplayer</div>'+
 '<button class="btn bp" onclick="h2hStart()">Head-to-Head</button>'+
+'<hr class="sep"><div class="slbl">Diagnostics</div>'+
+'<button class="btn bs" onclick="dgAsk=true;rn()">Alignment Self-Test</button>'+
 '<div class="hint">Or start from the device</div>';
 return;
 }
@@ -430,18 +466,19 @@ function ggo(){
 var m=gpMode;var c=gpGc||4;gpMode=null;gpGc=0;
 tx({a:'start',v:m,gc:c});
 }
+function dgGo(){dgAsk=false;txf({a:'selftest'});}
 
 function showFavCard(){
 var fc=$('fc');
-if(!S||S.a){fc.style.display='none';return;}
-if(h2hSetup||gpMode){fc.style.display='none';return;}
+if(!S||S.a||S.dg){fc.style.display='none';return;}
+if(h2hSetup||gpMode||dgAsk){fc.style.display='none';return;}
 fc.style.display='';
 }
 function showWifiCard(){
 var wc=$('wc');
 if(!wc)return;
-if(!S||S.a||S.sta){wc.style.display='none';return;}
-if(h2hSetup||gpMode){wc.style.display='none';return;}
+if(!S||S.a||S.sta||S.dg){wc.style.display='none';return;}
+if(h2hSetup||gpMode||dgAsk){wc.style.display='none';return;}
 wc.style.display='';
 rwifi();
 }
@@ -511,8 +548,8 @@ tx({a:'wifi_connect',s:wSel,p:p});
 }
 function showSetCard(){
 var sc=$('sc');
-if(!S||S.a){sc.style.display='none';return;}
-if(h2hSetup||gpMode){sc.style.display='none';return;}
+if(!S||S.a||S.dg){sc.style.display='none';return;}
+if(h2hSetup||gpMode||dgAsk){sc.style.display='none';return;}
 sc.style.display='';
 rset();
 }

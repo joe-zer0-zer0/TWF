@@ -18,6 +18,11 @@
 // ============================================================
 
 // --- Settings list items ---
+//
+// Session 9: Re-Home, Motor Test, Glass Diag and HW Diag moved out of
+// here and under Diagnostics (long-press the encoder on About), which
+// is where the rest of the engineering tools already lived. None of
+// them are operator controls — see screen_diagnostics.cpp.
 enum SettingsItem {
     SET_SOUND = 0,
     SET_BRIGHT,
@@ -31,13 +36,9 @@ enum SettingsItem {
     SET_OFF_DELAY,
     SET_FAVORITES,
     SET_CALIBRATE,
-    SET_REHOME,
-    SET_MOTORTEST,
-    SET_GLASSDIAG,
-    SET_HWDIAG,
     SET_ABOUT,
     SET_UPDATE,
-    SET_COUNT       // 18
+    SET_COUNT       // 14
 };
 
 // How many items fit in the content area
@@ -50,9 +51,6 @@ static int  setScrollOff   = 0;
 // --- Edit mode ---
 static bool editMode       = false;
 static int  editValue      = 0;   // temp value being edited
-
-// --- Re-Home confirmation ---
-static bool rehomeConfirm  = false;
 
 // --- Speed label lookup ---
 static const char* speedLabels[]    = { "Fast", "Normal", "Slow" };
@@ -111,10 +109,6 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
         case SET_OFF_DELAY: label = "Sleep";     break;
         case SET_FAVORITES: label = "Favorites"; break;
         case SET_CALIBRATE: label = "Calibrate"; break;
-        case SET_REHOME:    label = "Re-Home";   break;
-        case SET_MOTORTEST: label = "Motor Test"; break;
-        case SET_GLASSDIAG: label = "Glass Diag"; break;
-        case SET_HWDIAG:    label = "HW Diag";   break;
         case SET_ABOUT:     label = "About";     break;
         case SET_UPDATE:    label = "Update";    break;
     }
@@ -233,10 +227,6 @@ static void drawSettingsItem(int screenIdx, int itemIdx, bool selected, bool edi
             }
             break;
         }
-        case SET_REHOME:
-        case SET_MOTORTEST:
-        case SET_GLASSDIAG:
-        case SET_HWDIAG:
         case SET_ABOUT:
             // No value — action items
             tft->setTextColor(COL_DIM, bgCol);
@@ -453,9 +443,7 @@ static void settingsDraw(bool fullRedraw) {
     uiDrawTitleBar("SETTINGS", COL_ACCENT);
     drawSettingsList();
 
-    if (rehomeConfirm) {
-        uiDrawSoftButtons("CANCEL", "CONFIRM");
-    } else if (editMode) {
+    if (editMode) {
         uiDrawSoftButtons("CANCEL", "OK");
     } else {
         uiDrawSoftButtons("BACK", "SELECT");
@@ -466,33 +454,9 @@ static void settingsOnEnter() {
     setSelected = 0;
     setScrollOff = 0;
     editMode = false;
-    rehomeConfirm = false;
 }
 
 static void settingsInput(InputEvent evt) {
-    // --- Re-Home confirmation mode ---
-    if (rehomeConfirm) {
-        if (evt == INPUT_BTN_RIGHT || evt == INPUT_ENC_CLICK) {
-            rehomeConfirm = false;
-            audioPlayTone(TONE_CONFIRM);
-            // Run blocking homing sequence
-            bool ok = runHomingSequence();
-            if (ok) {
-                audioPlayTone(TONE_HOME_FOUND);
-            }
-            // Redraw settings screen after homing
-            uiRequestRedraw();
-            return;
-        }
-        if (evt == INPUT_BTN_LEFT) {
-            rehomeConfirm = false;
-            audioPlayTone(TONE_SELECT);
-            uiRequestRedraw();
-            return;
-        }
-        return;
-    }
-
     // --- Edit mode ---
     if (editMode) {
         switch (evt) {
@@ -556,12 +520,7 @@ static void settingsInput(InputEvent evt) {
 
         case INPUT_BTN_RIGHT:
         case INPUT_ENC_CLICK:
-            if (setSelected == SET_REHOME) {
-                // Show confirmation prompt
-                rehomeConfirm = true;
-                audioPlayTone(TONE_SELECT);
-                uiRequestRedraw();
-            } else if (setSelected == SET_ABOUT) {
+            if (setSelected == SET_ABOUT) {
                 // Push About screen
                 audioPlayTone(TONE_SELECT);
                 extern const Screen screenAbout;
@@ -586,19 +545,6 @@ static void settingsInput(InputEvent evt) {
                 audioPlayTone(TONE_SELECT);
                 extern const Screen screenCalibrate;
                 uiPushScreenT(&screenCalibrate, TRANS_WIPE_LEFT);
-            } else if (setSelected == SET_MOTORTEST) {
-                // Push motor diagnostics screen
-                audioPlayTone(TONE_SELECT);
-                extern const Screen screenMotorTest;
-                uiPushScreenT(&screenMotorTest, TRANS_WIPE_LEFT);
-            } else if (setSelected == SET_GLASSDIAG) {
-                audioPlayTone(TONE_SELECT);
-                extern const Screen screenGlassDiag;
-                uiPushScreenT(&screenGlassDiag, TRANS_WIPE_LEFT);
-            } else if (setSelected == SET_HWDIAG) {
-                audioPlayTone(TONE_SELECT);
-                extern const Screen screenHwDiag;
-                uiPushScreenT(&screenHwDiag, TRANS_WIPE_LEFT);
             } else if (setSelected == SET_UPDATE) {
                 if (wifiIsSTAMode()) {
                     audioPlayTone(TONE_SELECT);

@@ -9,6 +9,7 @@
 #include "transitions.h"
 #include "telemetry.h"
 #include "battery.h"
+#include "selftest.h"
 #ifndef HEADLESS_BUILD
 #include "screens.h"
 #endif
@@ -743,6 +744,24 @@ cn();
 #define JSON_REM     ((pos < bufLen) ? (bufLen - pos) : 0)
 
 static int buildStateJSON(char* buf, int bufLen) {
+    // A characterisation run blocks loop() for a couple of minutes, so
+    // the phone would sit on a stale screen with live-looking buttons.
+    // This state renders a full-screen notice instead and suspends
+    // every control except the abort. It is pushed and flushed before
+    // the first move — see flushNotice() in selftest.cpp — because
+    // anything sent after that will not leave the device until the run
+    // is over, which is exactly too late to be useful.
+    if (selfTestIsRunning()) {
+        return snprintf(buf, bufLen,
+            "{\"a\":false,\"dg\":1,\"dgp\":%d,\"dgt\":%d,\"dgv\":%d,"
+            "\"dgg\":%d,\"dgo\":%d,\"sta\":%s,\"serial\":\"%s\",\"n\":%d}",
+            selfTestCurrentPass(), SELFTEST_TOTAL_PASSES,
+            selfTestCurrentVisit(), selfTestCurrentGlass(),
+            selfTestCurrentOrder(),
+            staMode ? "true" : "false", deviceGetSerial(),
+            settingsGetGlassCount());
+    }
+
     bool active = gameIsActive();
 
     if (!active) {
@@ -1375,6 +1394,35 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
         return;
     }
 
+    // --- Alignment self-test (Session 9) ---
+    //
+    // The request only sets a flag; the run itself happens in
+    // selfTestUpdate() from loop(). Starting it here would mean a
+    // two-minute blocking sequence executing inside a WebSocket
+    // callback, with wifiPortalUpdate() re-entered from within itself.
+    if (action == "selftest") {
+        bool ok = selfTestRequest();
+        Serial.printf("[WiFi] Phone: selftest request -> %s\n",
+                      ok ? "accepted" : "refused");
+        if (!ok) wsServer.sendTXT(clientNum, "{\"t\":\"dg_busy\"}");
+        return;
+    }
+    if (action == "selftest_stop") {
+        Serial.println("[WiFi] Phone: selftest abort");
+        selfTestAbort();
+        return;
+    }
+
+    // While a run is in progress every other action is ignored. The
+    // phone UI already suppresses its controls, but a client that
+    // missed the notice — or reconnected mid-run — must not be able to
+    // start a flight underneath a moving carousel.
+    if (selfTestIsRunning()) {
+        Serial.printf("[WiFi] Phone action '%s' ignored: self-test running\n",
+                      action.c_str());
+        return;
+    }
+
     // --- Button actions ---
     if (action == "right") {
         Serial.println("[WiFi] Phone: right");
@@ -1773,7 +1821,10 @@ static void handleLog() {
     size_t len1, len2;
     telemetrySegments(&seg1, &len1, &seg2, &len2);
 
-    char header[512];
+    // Sized for the whole record legend below plus the expanded status
+    // line — the Session 9 S-record documentation pushed the old 512 B
+    // past truncation.
+    char header[1024];
     int h = snprintf(header, sizeof(header),
         "# Blind Flight telemetry\n"
         "# fw=%s device=%s run=%lu\n"
@@ -1786,6 +1837,11 @@ static void handleLog() {
         "# X,run,ms,mV,glass,crossIdx,expected,actual,drift\n"
         "#   drift = actual - expected steps to the Hall leading edge\n"
         "# M,run,ms,mV,from,to,dir,steps\n"
+        "# S,run,ms,mV,pass,order,visit,glass,predicted,measured,err,magW,ok\n"
+        "#   order: 0=sequential 1=randomised 2=chain (measured last only)\n"
+        "#   err = predicted - measured, wrapped to +/- half a rev.\n"
+        "#   positive err = the disc overshot clockwise past the target.\n"
+        "#   1 microstep = 0.225 deg = 0.275 mm at the 70 mm glass radius\n"
         "#\n",
         FW_VERSION, deviceGetSerial(), (unsigned long)telemetryGetRunId(),
         (unsigned long)millis(),

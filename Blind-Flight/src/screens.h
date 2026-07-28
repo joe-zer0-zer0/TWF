@@ -38,8 +38,14 @@ extern const Screen screenGlassDiag;
 // Hardware diagnostics (jog, Hall, enable, step test)
 extern const Screen screenHwDiag;
 
-// Diagnostics screen (hidden — long-press encoder on About)
+// Diagnostics menu (hidden — long-press encoder on About).
+// Session 9: this is now the single container for every engineering
+// tool — Re-Home, Auto Diag, Motor Test, Glass Diag, HW Diag — plus the
+// usage stats and flight log pages.
 extern const Screen screenDiagnostics;
+
+// Automatic alignment characterisation (Session 9)
+extern const Screen screenSelfTest;
 
 // Head-to-Head multiplayer (Session 23)
 extern const Screen screenH2H;

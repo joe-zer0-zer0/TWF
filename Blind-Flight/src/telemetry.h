@@ -22,6 +22,7 @@
 //   H,<run>,<ms>,<mV>,<magnetWidth>,<attempt>,<failPhase>
 //   X,<run>,<ms>,<mV>,<glass>,<crossIdx>,<expected>,<actual>,<drift>
 //   M,<run>,<ms>,<mV>,<from>,<to>,<dir>,<steps>
+//   S,<run>,<ms>,<mV>,<pass>,<order>,<visit>,<glass>,<predicted>,<measured>,<err>,<magW>,<ok>
 //
 // Anything else written to the ring is prefixed '#', so a parser
 // that drops '#' lines sees pure CSV.
@@ -58,6 +59,21 @@ void telemetryLogCrossing(int glass, int crossIdx, int expected,
                           int actual, int drift);
 
 void telemetryLogMove(int fromPos, int toPos, bool clockwise, int steps);
+
+// One record per position visited during the Session 9 self-test.
+//
+// order: 0 = sequential (1,2,3,4), 1 = randomised. visit is the 0-based
+// index within the pass, glass is the physical position. Reporting both
+// separately is the whole point — the existing "glass 4 is worst" evidence
+// came from tools that always traverse in order, so position and
+// visit-index are confounded in it.
+//
+// predicted = CW microsteps from the firmware's believed position to home;
+// measured = what the Hall actually reported; err = predicted - measured,
+// wrapped to +/- half a revolution. Positive err = the disc overshot CW.
+void telemetryLogSelfTest(int pass, int order, int visit, int glass,
+                          int predicted, int measured, int err,
+                          int magnetWidth, bool ok);
 
 // --- Accessors ---
 

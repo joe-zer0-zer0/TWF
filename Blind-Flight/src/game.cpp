@@ -1912,6 +1912,12 @@ bool gameIsActive() {
     return gameActive;
 }
 
+void gameInvalidateHoming() {
+    if (!gameActive || !homedThisFlight) return;
+    homedThisFlight = false;
+    Serial.println("[Game] Position no longer verified — will re-home before next pour");
+}
+
 void gameAbort() {
     if (!gameActive) return;
     Serial.println("[Game] Aborted via long-press cancel");

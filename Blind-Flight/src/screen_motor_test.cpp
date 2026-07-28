@@ -37,6 +37,15 @@ static int  testVisitCount = 0;
 // Status message
 static char testStatus[40] = "Select or Random";
 
+// Home-on-entry, deferred out of onEnter (Session 9). Every glass this
+// screen moves to is computed from currentMotorPos, so entering with a
+// stale position — after the disc has been turned by hand, or after an
+// idle timeout dropped the driver — means every reading it produces is
+// measured against a fiction. Homing must not happen inside onEnter,
+// though: it blocks for seconds and draws its own full-screen UI, and
+// onEnter runs mid-transition. The first draw pass does it instead.
+static bool pendingHome = false;
+
 // ============================================================
 // Helpers
 // ============================================================
@@ -78,6 +87,12 @@ static int selectRandomUnvisited() {
 // ============================================================
 
 static void testDraw(bool fullRedraw) {
+    if (pendingHome) {
+        pendingHome = false;
+        runHomingSequence();
+        fullRedraw = true;
+    }
+
     if (!fullRedraw) return;
 
     TFT_eSPI* tft = uiGetTFT();
@@ -273,6 +288,7 @@ static void testInput(InputEvent evt) {
 static void testOnEnter() {
     testGlass = 1;
     resetVisited();
+    pendingHome = true;
     snprintf(testStatus, sizeof(testStatus), "Select or Random");
 }
 

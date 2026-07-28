@@ -1111,6 +1111,12 @@ bool h2hIsActive() {
     return h2hActive;
 }
 
+void h2hInvalidateHoming() {
+    if (!h2hActive || !homedThisFlight) return;
+    homedThisFlight = false;
+    Serial.println("[H2H] Position no longer verified — will re-home before next pour");
+}
+
 H2HPhase h2hGetPhase() {
     return phase;
 }

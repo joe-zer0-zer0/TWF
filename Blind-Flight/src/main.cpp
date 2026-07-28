@@ -14,6 +14,7 @@
 #include "ota.h"
 #include "device_id.h"
 #include "telemetry.h"
+#include "selftest.h"
 
 #ifndef HEADLESS_BUILD
 #include <TFT_eSPI.h>
@@ -95,6 +96,11 @@ void loop() {
 #endif
 
     wifiPortalUpdate();
+
+    // Blocks for the duration of a characterisation run when one has
+    // been requested, and returns immediately otherwise. It services
+    // the portal itself between moves.
+    selfTestUpdate();
 
     delay(1);
 }
