@@ -60,21 +60,38 @@ void settingsInit() {
 
     prefs.end();
 
-    // Clamp to valid ranges
-    if (sVolume > 4)     sVolume = 4;
-    if (sBrightness > 4) sBrightness = 4;
-    if (sSpinSpeed > 2)  sSpinSpeed = 2;
-    if (sPourSide > 3)   sPourSide = 3;
-    if (sHomeOffset < -200) sHomeOffset = -200;
-    if (sHomeOffset >  200) sHomeOffset =  200;
-    if (sGlassCount < 2) sGlassCount = 2;
-    if (sGlassCount > 4) sGlassCount = 4;
-    if (sDimDelay < 30)   sDimDelay = 30;
-    if (sDimDelay > 300)  sDimDelay = 300;
-    if (sOffDelay < 120)  sOffDelay = 120;
-    if (sOffDelay > 1800) sOffDelay = 1800;
+    // Clamp to valid ranges. Track whether anything actually had to be
+    // corrected: unconditionally clearing sDirty afterwards meant a
+    // clamped value was never written back, so the same bad value was
+    // re-read and re-clamped on every boot and the NVS copy stayed wrong.
+    bool clamped = false;
+    #define CLAMP_LO(var, lo) do { if ((var) < (lo)) { (var) = (lo); clamped = true; } } while (0)
+    #define CLAMP_HI(var, hi) do { if ((var) > (hi)) { (var) = (hi); clamped = true; } } while (0)
 
-    sDirty = false;
+    CLAMP_HI(sVolume, 4);
+    CLAMP_HI(sBrightness, 4);
+    CLAMP_HI(sSpinSpeed, 2);
+    CLAMP_HI(sPourSide, 3);
+    CLAMP_LO(sHomeOffset, -200);
+    CLAMP_HI(sHomeOffset,  200);
+    CLAMP_LO(sGlassCount, 2);
+    CLAMP_HI(sGlassCount, 4);
+    CLAMP_LO(sDimDelay, 30);
+    CLAMP_HI(sDimDelay, 300);
+    CLAMP_LO(sOffDelay, 120);
+    CLAMP_HI(sOffDelay, 1800);
+
+    #undef CLAMP_LO
+    #undef CLAMP_HI
+
+    sDirty = clamped;
+    if (clamped) {
+        // Write back now rather than waiting for the user to open the
+        // settings screen — the headless build has no settings screen at
+        // all, so otherwise the bad value would survive indefinitely.
+        Serial.println("[Settings] Out-of-range values clamped — persisting");
+        settingsSave();
+    }
 
     Serial.printf("[Settings] Loaded: snd=%d vol=%d bright=%d wifi=%d spd=%d pour=%d homeOff=%d\n",
                   sSoundOn, sVolume, sBrightness, sWifiOn, sSpinSpeed, sPourSide, sHomeOffset);

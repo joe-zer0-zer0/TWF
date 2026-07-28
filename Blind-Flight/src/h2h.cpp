@@ -72,10 +72,13 @@ static const char* countLabels[COUNT_OPTIONS] = { "2 Glasses", "3 Glasses", "4 G
 // Helpers
 // ============================================================
 
+// Same rationale as game.cpp's copy — service the portal so a connected
+// phone is not starved for the length of every pause between pours.
 static void delayWithAudio(unsigned long ms) {
     unsigned long start = millis();
     while (millis() - start < ms) {
         audioUpdate();
+        wifiPortalService();
         delay(1);
     }
 }
@@ -283,6 +286,27 @@ static void runH2HPourCycle() {
 #ifndef HEADLESS_BUILD
     if (batteryIsLockout()) {
         Serial.println("[H2H] Battery lockout during pour");
+        gameShowLockoutScreen();
+
+        // A bare return used to leave `phase` untouched. From the lobby
+        // that made the start button look dead; mid-flight it was worse —
+        // the screen still showed POURING for a glass the disc never moved
+        // to, and confirming again would count a pour that never happened.
+        // Land in a defined phase instead.
+        //
+        // Random/Premium can salvage what is already in the glasses, so
+        // they go to tasting. A 2x2 comparison needs all four glasses and
+        // cannot be assigned from a partial set, so it resets.
+        if (pourCount > 0 && subMode != H2H_SUB_2X2) {
+            motorDisable();
+            phase = H2H_TASTING;
+        } else {
+            resetSession();
+            phase = H2H_BOTTLE_SELECT;
+        }
+        flushInput();
+        uiRequestRedraw();
+        wifiPortalBroadcastNow();
         return;
     }
 #endif
@@ -335,8 +359,12 @@ static void runH2HPourCycle() {
 #endif
 
     int extraRevs = motorGetExtraRevs();
+    // Flag before the broadcast so the phone learns the disc is moving
+    // *before* loop() blocks for the duration of the spin.
+    gameSetSpinning(true);
     wifiPortalBroadcastNow();
     motorSpinToGlass(currentGlass, extraRevs);
+    gameSetSpinning(false);
     wifiPortalBroadcastNow();
 
     audioPlayTone(TONE_ARRIVE);
@@ -362,8 +390,10 @@ static void runFinalSpin() {
     delayWithAudio(400);
     int steps = 3 * MICROSTEPS_PER_REV + random(MICROSTEPS_PER_REV);
 
+    gameSetSpinning(true);
     wifiPortalBroadcastNow();
     motorSpinSteps(steps);
+    gameSetSpinning(false);
     wifiPortalBroadcastNow();
 
     audioPlayTone(TONE_ARRIVE);

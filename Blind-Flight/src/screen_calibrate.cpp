@@ -128,12 +128,45 @@ static void drawDone() {
 // Screen callbacks
 // ============================================================
 
+// Homing blocks for seconds and draws its own full-screen UI, and on
+// failure the screen has to leave. Neither belongs in onEnter(), which
+// runs mid-transition — a uiPopScreenT() nested inside a push corrupts
+// the screen stack (see CLAUDE.md). Deferred to the first draw pass,
+// matching the pattern in screen_motor_test.cpp.
+static bool pendingStart = false;
+static bool pendingExit  = false;
+
+static void startCalibration() {
+    if (!runHomingSequence()) {
+        audioPlayTone(TONE_ERROR);
+        pendingExit = true;
+        return;
+    }
+
+    // Move glass 1 to the pour position (using current offset)
+    motorMoveToGlass(1);
+    audioPlayTone(TONE_ARRIVE);
+    calState = CAL_ADJUSTING;
+}
+
 static void calibrateDraw(bool fullRedraw) {
+    if (pendingStart) {
+        pendingStart = false;
+        startCalibration();
+        fullRedraw = true;
+    }
+
+    if (pendingExit) {
+        pendingExit = false;
+        uiPopScreenT(TRANS_WIPE_LEFT);
+        return;
+    }
+
     if (!fullRedraw) return;
 
     switch (calState) {
         case CAL_HOMING:
-            // Homing is done in onEnter; shouldn't linger here
+            // Transient: the first draw pass runs the homing and moves on.
             break;
         case CAL_ADJUSTING:
             drawAdjusting();
@@ -248,20 +281,8 @@ static void calibrateOnEnter() {
     // Load current saved offset as starting point
     calOffset = settingsGetHomeOffset();
     calState = CAL_HOMING;
-
-    // Home the motor first
-    bool ok = runHomingSequence();
-    if (!ok) {
-        audioPlayTone(TONE_ERROR);
-        uiPopScreenT(TRANS_WIPE_LEFT);
-        return;
-    }
-
-    // Move glass 1 to the pour position (using current offset)
-    motorMoveToGlass(1);
-    audioPlayTone(TONE_ARRIVE);
-
-    calState = CAL_ADJUSTING;
+    pendingStart = true;
+    pendingExit  = false;
 }
 
 const Screen screenCalibrate = {

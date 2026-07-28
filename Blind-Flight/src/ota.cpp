@@ -277,6 +277,21 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
         return false;
     }
 
+    // expectedSize used to be accepted and never looked at. Report a
+    // mismatch, but deliberately do NOT abort on it.
+    //
+    // Any size mismatch that matters also fails the SHA-256 check below,
+    // so aborting here would buy nothing but a faster failure — while
+    // adding a brand new way for a *legitimate* update to be refused (a
+    // proxy or CDN reporting a different Content-Length, say). With USB
+    // access gone, a device that refuses good firmware has no way back,
+    // so the hash stays the single gate and this is diagnostics only.
+    if (expectedSize > 0 && (uint32_t)contentLength != expectedSize) {
+        Serial.printf("[OTA] WARNING size mismatch: manifest %u, server %d "
+                      "— continuing, SHA-256 will decide\n",
+                      expectedSize, contentLength);
+    }
+
     if (!Update.begin(contentLength)) {
         http.end();
         snprintf(errMsg, errMsgLen, "Not enough space");
@@ -296,11 +311,23 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
     uint8_t buf[1024];
     uint32_t written = 0;
     unsigned long lastProgress = 0;
+    unsigned long lastData = millis();
 
     while (written < (uint32_t)contentLength) {
         int available = stream->available();
         if (available <= 0) {
             if (!stream->connected()) break;
+            // A connection that stays open but stops delivering would spin
+            // here forever. Give up after OTA_STALL_TIMEOUT of no bytes.
+            if (millis() - lastData >= OTA_STALL_TIMEOUT) {
+                if (doHash) mbedtls_md_free(&mdCtx);
+                Update.abort();
+                http.end();
+                snprintf(errMsg, errMsgLen, "Download stalled");
+                Serial.printf("[OTA] Stalled at %u/%d bytes\n",
+                              written, contentLength);
+                return false;
+            }
             delay(1);
             continue;
         }
@@ -308,6 +335,7 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
         int toRead = min(available, (int)sizeof(buf));
         int bytesRead = stream->readBytes(buf, toRead);
         if (bytesRead <= 0) break;
+        lastData = millis();
 
         if (doHash) {
             mbedtls_md_update(&mdCtx, buf, bytesRead);

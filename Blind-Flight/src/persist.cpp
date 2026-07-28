@@ -27,15 +27,44 @@ static bool hasValid = false;
 
 static SessionSnapshot cachedSnap;
 
+// The magic byte and version only prove the blob was written by this
+// firmware, not that its contents are sane — a partial NVS write or a
+// snapshot saved by a build with different limits passes both checks.
+// Everything here is used as an array index or a switch selector
+// downstream; `pourCount` in particular indexes pourOrder[NUM_GLASSES] in
+// runPourCycle(). Validate once, on load, so every reader is covered
+// rather than just persistLoadGame().
+static bool snapshotIsSane(const SessionSnapshot& s) {
+    if (s.mode > GAME_MODE_H2H)     return false;
+    if (s.savedState > GAME_DONE)    return false;
+    if (s.glassCount < 1 || s.glassCount > NUM_GLASSES) return false;
+    if (s.pourCount > s.glassCount) return false;
+
+    for (int i = 0; i < NUM_GLASSES; i++) {
+        // pourOrder holds 1-based glass numbers; 0 means "not yet set".
+        if (s.pourOrder[i] > NUM_GLASSES) return false;
+        if (s.rankOrder[i] > NUM_GLASSES) return false;
+        // guessForGlass is a 0-based pour index, or -1 for no guess.
+        if (s.guessForGlass[i] < -1 || s.guessForGlass[i] >= NUM_GLASSES) return false;
+        // A name that lost its terminator would run off the end of the row.
+        if (memchr(s.glassName[i], '\0', MAX_GLASS_NAME) == nullptr) return false;
+    }
+    return true;
+}
+
 void persistInit() {
     prefs.begin(NVS_NS, true);
     size_t len = prefs.getBytesLength("snap");
     if (len == sizeof(SessionSnapshot)) {
         prefs.getBytes("snap", &cachedSnap, sizeof(cachedSnap));
         if (cachedSnap.magic == PERSIST_MAGIC && cachedSnap.version == PERSIST_VERSION) {
-            hasValid = true;
-            Serial.printf("[Persist] Found session: mode=%d pours=%d/%d\n",
-                          cachedSnap.mode, cachedSnap.pourCount, cachedSnap.glassCount);
+            if (snapshotIsSane(cachedSnap)) {
+                hasValid = true;
+                Serial.printf("[Persist] Found session: mode=%d pours=%d/%d\n",
+                              cachedSnap.mode, cachedSnap.pourCount, cachedSnap.glassCount);
+            } else {
+                Serial.println("[Persist] Saved session failed validation — discarding");
+            }
         }
     }
     prefs.end();

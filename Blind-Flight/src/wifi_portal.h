@@ -22,7 +22,15 @@
 
 void wifiPortalInit();
 void wifiPortalStop();
+// Full tick — call from loop() only. Services the transport and also
+// drives the pending-wifi_connect screen push/pop.
 void wifiPortalUpdate();
+
+// Transport only (DNS/HTTP/WebSocket). Safe to call from inside blocking
+// loops, where wifiPortalUpdate() is not: it touches no screens, so it
+// cannot nest a transition inside whatever operation is blocking.
+void wifiPortalService();
+
 int  wifiPortalGetClientCount();
 void wifiPortalBroadcastNow();
 bool wifiPortalIsRunning();

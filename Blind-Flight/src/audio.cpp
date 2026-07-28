@@ -69,8 +69,19 @@ static bool toneActive = false;
 static bool    sMuted  = false;
 static uint8_t sVolLvl = 3;       // 0–4
 
+static void buzzerIdle();
+
 // Apply the current volume duty after starting a tone
 static void applyVolumeDuty() {
+    // VOLUME_DUTY[0] is 0, and ledcWrite(ch, 0) holds the pin LOW — which
+    // on the active-low MH-FMD module means the driver conducts DC through
+    // the coil for the whole duration of every "silent" note. That is the
+    // exact condition buzzerIdle() exists to prevent, so level 0 has to
+    // park the pin HIGH rather than write a zero duty.
+    if (sVolLvl == 0) {
+        buzzerIdle();
+        return;
+    }
     if (sVolLvl < 5) {
         ledcWrite(BUZZER_CHANNEL, VOLUME_DUTY[sVolLvl]);
     }

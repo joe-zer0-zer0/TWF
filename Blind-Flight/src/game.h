@@ -135,6 +135,18 @@ const char* gameGetGlassName(int pourIdx);       // 0-based pour index
 // polling gameGetState() afterward.
 bool      gameIsSpinning();
 
+// Set by whichever module owns the disc for the duration of a blocking
+// spin. The flag describes the *device*, not the Basic-mode game, so
+// Head-to-Head sets it too — otherwise the phone shows no spinning state
+// at all during an H2H flight.
+void      gameSetSpinning(bool spinning);
+
+#ifndef HEADLESS_BUILD
+// Modal "battery too low" notice; returns when the user acknowledges.
+// Shared with h2h.cpp so both flights report a lockout the same way.
+void      gameShowLockoutScreen();
+#endif
+
 // Reveal info (valid when state >= GAME_REVEAL or GAME_GUESSING)
 int       gameGetRevealCount();
 int       gameGetRevealIndex();

@@ -20,6 +20,7 @@
 #include <ESPmDNS.h>
 #include <WebSocketsServer.h>
 #include <Preferences.h>
+#include <stdarg.h>
 
 // ============================================================
 // Blind Flight — Wi-Fi Portal Module
@@ -737,6 +738,61 @@ cn();
 #endif
 
 // ============================================================
+// JSON append helpers
+// ============================================================
+//
+// `snprintf`'s size argument is a size_t. Writing `sizeof(buf) - pos`
+// directly means that once `pos` passes the buffer length the subtraction
+// wraps to ~4 billion and snprintf happily writes off the end of a stack
+// buffer. These helpers keep `pos` clamped to `bufLen - 1`, so once the
+// buffer is full every further append is a no-op and the result stays
+// NUL-terminated and truncated rather than corrupt.
+//
+// `pos` is passed by reference and updated in place.
+//
+// Buffer sizes are worked out from the worst case each document can
+// actually reach, allowing for every character needing an escape:
+//   STATE  — one size for both senders. They used to differ (1280 vs
+//            1024), so a client's first snapshot truncated at a different
+//            point than every subsequent broadcast.
+//   FAVS   — 30 names x 21 chars, doubled by escaping, + quotes/commas.
+//   H2H    — 4 players + bottle list + premium fields.
+//   SCAN   — 15 SSIDs x 32 chars, doubled by escaping, + rssi/enc.
+#define STATE_JSON_BUF  1280
+#define FAVS_JSON_BUF   1536
+#define H2H_JSON_BUF    1024
+#define SCAN_JSON_BUF   1536
+
+static void jsonAppend(char* buf, int bufLen, int& pos, const char* fmt, ...) {
+    if (pos >= bufLen - 1) return;
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf + pos, bufLen - pos, fmt, ap);
+    va_end(ap);
+    // vsnprintf returns what it *would* have written, so n can exceed the
+    // space that was actually available. Clamp instead of trusting it.
+    pos = (n < 0 || pos + n >= bufLen) ? (bufLen - 1) : (pos + n);
+}
+
+static void jsonAppendChar(char* buf, int bufLen, int& pos, char c) {
+    if (pos < bufLen - 1) buf[pos++] = c;
+}
+
+// Append a string as JSON string *contents* (no surrounding quotes),
+// escaping the two characters that would otherwise break the document.
+// Control characters are dropped — the phone UI has no use for them and
+// raw \x00-\x1f is invalid JSON.
+static void jsonAppendEscaped(char* buf, int bufLen, int& pos, const char* s) {
+    if (!s) return;
+    for (int i = 0; s[i]; i++) {
+        char c = s[i];
+        if (c == '"' || c == '\\') jsonAppendChar(buf, bufLen, pos, '\\');
+        else if ((unsigned char)c < 0x20) continue;
+        jsonAppendChar(buf, bufLen, pos, c);
+    }
+}
+
+// ============================================================
 // JSON state builder
 // ============================================================
 
@@ -1002,7 +1058,7 @@ static int buildStateJSON(char* buf, int bufLen) {
 // ============================================================
 
 static void broadcastState() {
-    char json[1280];
+    char json[STATE_JSON_BUF];
     buildStateJSON(json, sizeof(json));
     wsServer.broadcastTXT(json);
 }
@@ -1015,7 +1071,7 @@ void wifiPortalBroadcastNow() {
 }
 
 static void sendStateToClient(uint8_t num) {
-    char json[1024];
+    char json[STATE_JSON_BUF];
     buildStateJSON(json, sizeof(json));
     wsServer.sendTXT(num, json);
 }
@@ -1024,45 +1080,33 @@ static void sendStateToClient(uint8_t num) {
 // Favorites JSON helpers
 // ============================================================
 
-static void sendFavoritesJSON(uint8_t clientNum) {
-    char json[1024];
+// Both favorites senders build the identical document; only the delivery
+// differs. Build once so the two can never drift apart.
+static int buildFavoritesJSON(char* json, int bufLen) {
     int pos = 0;
     int cnt = favoritesGetCount();
-    pos += snprintf(json + pos, sizeof(json) - pos,
+    jsonAppend(json, bufLen, pos,
         "{\"t\":\"favs\",\"cnt\":%d,\"max\":%d,\"list\":[", cnt, FAV_MAX_COUNT);
     for (int i = 0; i < cnt; i++) {
-        if (i > 0 && pos < (int)sizeof(json) - 1) json[pos++] = ',';
-        pos += snprintf(json + pos, sizeof(json) - pos, "\"");
-        const char* n = favoritesGetName(i);
-        for (int j = 0; n[j] && pos < (int)sizeof(json) - 2; j++) {
-            if (n[j] == '"' || n[j] == '\\') json[pos++] = '\\';
-            json[pos++] = n[j];
-        }
-        pos += snprintf(json + pos, sizeof(json) - pos, "\"");
+        if (i > 0) jsonAppendChar(json, bufLen, pos, ',');
+        jsonAppendChar(json, bufLen, pos, '"');
+        jsonAppendEscaped(json, bufLen, pos, favoritesGetName(i));
+        jsonAppendChar(json, bufLen, pos, '"');
     }
-    pos += snprintf(json + pos, sizeof(json) - pos, "]}");
+    jsonAppend(json, bufLen, pos, "]}");
     json[pos] = '\0';
+    return pos;
+}
+
+static void sendFavoritesJSON(uint8_t clientNum) {
+    char json[FAVS_JSON_BUF];
+    buildFavoritesJSON(json, sizeof(json));
     wsServer.sendTXT(clientNum, json);
 }
 
 static void broadcastFavoritesJSON() {
-    char json[1024];
-    int pos = 0;
-    int cnt = favoritesGetCount();
-    pos += snprintf(json + pos, sizeof(json) - pos,
-        "{\"t\":\"favs\",\"cnt\":%d,\"max\":%d,\"list\":[", cnt, FAV_MAX_COUNT);
-    for (int i = 0; i < cnt; i++) {
-        if (i > 0 && pos < (int)sizeof(json) - 1) json[pos++] = ',';
-        pos += snprintf(json + pos, sizeof(json) - pos, "\"");
-        const char* n = favoritesGetName(i);
-        for (int j = 0; n[j] && pos < (int)sizeof(json) - 2; j++) {
-            if (n[j] == '"' || n[j] == '\\') json[pos++] = '\\';
-            json[pos++] = n[j];
-        }
-        pos += snprintf(json + pos, sizeof(json) - pos, "\"");
-    }
-    pos += snprintf(json + pos, sizeof(json) - pos, "]}");
-    json[pos] = '\0';
+    char json[FAVS_JSON_BUF];
+    buildFavoritesJSON(json, sizeof(json));
     wsServer.broadcastTXT(json);
 }
 
@@ -1129,49 +1173,60 @@ static void buildAndBroadcastH2H() {
         default:              modeStr = "unknown";   break;
     }
 
-    char json[768];
+    char json[H2H_JSON_BUF];
     int pos = 0;
-    pos += snprintf(json + pos, sizeof(json) - pos,
+    jsonAppend(json, sizeof(json), pos,
         "{\"t\":\"h2h\",\"phase\":\"%s\",\"mode\":\"%s\",\"gc\":%d,\"players\":[",
         phaseStr, modeStr, h2hGetGlassCount());
 
     for (int i = 0; i < pc; i++) {
         const H2HPlayer* p = h2hGetPlayer(i);
         if (!p) continue;
-        if (i > 0 && pos < (int)sizeof(json) - 1) json[pos++] = ',';
-        pos += snprintf(json + pos, sizeof(json) - pos,
-            "{\"n\":\"%s\",\"c\":%s,\"s\":%s,\"gl\":%d}",
-            p->name,
+        if (i > 0) jsonAppendChar(json, sizeof(json), pos, ',');
+        // Player names are typed on a phone, so a stray quote or backslash
+        // would otherwise break the whole document for every client.
+        jsonAppend(json, sizeof(json), pos, "{\"n\":\"");
+        jsonAppendEscaped(json, sizeof(json), pos, p->name);
+        jsonAppend(json, sizeof(json), pos, "\",\"c\":%s,\"s\":%s,\"gl\":%d}",
             p->connected ? "true" : "false",
             p->submitted ? "true" : "false",
             p->claimedGlass);
     }
-    pos += snprintf(json + pos, sizeof(json) - pos, "]");
+    jsonAppend(json, sizeof(json), pos, "]");
+
+    // The phone renders Head-to-Head from this document, not from the
+    // main state document, so the spinning flag has to travel here too —
+    // otherwise an H2H spin looks like a frozen panel.
+    if (gameIsSpinning()) {
+        jsonAppend(json, sizeof(json), pos, ",\"sp\":true");
+    }
 
     if (ph == H2H_WAITING) {
-        pos += snprintf(json + pos, sizeof(json) - pos,
+        jsonAppend(json, sizeof(json), pos,
             ",\"submitted\":%d,\"total\":%d",
             h2hGetSubmittedCount(), h2hGetRequiredPlayers());
     }
 
     if (ph >= H2H_ASSIGN) {
         int bc = h2hGetBottleCount();
-        pos += snprintf(json + pos, sizeof(json) - pos, ",\"bottles\":[");
+        jsonAppend(json, sizeof(json), pos, ",\"bottles\":[");
         for (int i = 0; i < bc; i++) {
-            if (i > 0 && pos < (int)sizeof(json) - 1) json[pos++] = ',';
-            pos += snprintf(json + pos, sizeof(json) - pos,
-                "\"%s\"", h2hGetBottleName(i));
+            if (i > 0) jsonAppendChar(json, sizeof(json), pos, ',');
+            jsonAppendChar(json, sizeof(json), pos, '"');
+            jsonAppendEscaped(json, sizeof(json), pos, h2hGetBottleName(i));
+            jsonAppendChar(json, sizeof(json), pos, '"');
         }
-        pos += snprintf(json + pos, sizeof(json) - pos, "]");
+        jsonAppend(json, sizeof(json), pos, "]");
     }
 
     if (sm == H2H_SUB_PREMIUM && ph >= H2H_TASTING) {
-        pos += snprintf(json + pos, sizeof(json) - pos,
-            ",\"premium\":\"%s\",\"premGlass\":%d",
-            h2hGetBottleName(0), h2hGetPremiumGlassNum());
+        jsonAppend(json, sizeof(json), pos, ",\"premium\":\"");
+        jsonAppendEscaped(json, sizeof(json), pos, h2hGetBottleName(0));
+        jsonAppend(json, sizeof(json), pos, "\",\"premGlass\":%d",
+            h2hGetPremiumGlassNum());
     }
 
-    pos += snprintf(json + pos, sizeof(json) - pos, "}");
+    jsonAppend(json, sizeof(json), pos, "}");
     json[pos] = '\0';
 
     wsServer.broadcastTXT(json);
@@ -1253,36 +1308,74 @@ static void jsonUnescapeInPlace(char* s) {
 // Wi-Fi scan/connect WebSocket handlers
 // ============================================================
 
-static void handleWifiScan() {
-    Serial.println("[WiFi] Starting network scan...");
-    int n = WiFi.scanNetworks();
+// The synchronous WiFi.scanNetworks() blocks loop() for several seconds
+// — no WebSocket, no HTTP, no DNS — and it is triggered from the phone,
+// so the UI that asked for the scan is the one that freezes. Kick the
+// scan off asynchronously and collect the result from wifiPortalUpdate().
+static bool          scanPending   = false;
+static unsigned long scanStartMs   = 0;
+
+static void publishWifiScanResults(int n) {
     if (n < 0) n = 0;
     if (n > WIFI_MAX_SCAN_RESULTS) n = WIFI_MAX_SCAN_RESULTS;
 
-    char json[1024];
+    char json[SCAN_JSON_BUF];
     int pos = 0;
-    pos += snprintf(json + pos, sizeof(json) - pos, "{\"t\":\"wifi_nets\",\"nets\":[");
+    jsonAppend(json, sizeof(json), pos, "{\"t\":\"wifi_nets\",\"nets\":[");
     for (int i = 0; i < n; i++) {
-        if (i > 0 && pos < (int)sizeof(json) - 1) json[pos++] = ',';
-        pos += snprintf(json + pos, sizeof(json) - pos,
-            "{\"s\":\"");
-        String ssid = WiFi.SSID(i);
-        for (int j = 0; j < (int)ssid.length() && pos < (int)sizeof(json) - 4; j++) {
-            char c = ssid[j];
-            if (c == '"' || c == '\\') json[pos++] = '\\';
-            json[pos++] = c;
-        }
-        pos += snprintf(json + pos, sizeof(json) - pos,
+        if (i > 0) jsonAppendChar(json, sizeof(json), pos, ',');
+        jsonAppend(json, sizeof(json), pos, "{\"s\":\"");
+        jsonAppendEscaped(json, sizeof(json), pos, WiFi.SSID(i).c_str());
+        jsonAppend(json, sizeof(json), pos,
             "\",\"r\":%d,\"e\":%s}",
             WiFi.RSSI(i),
             WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "true" : "false");
     }
-    pos += snprintf(json + pos, sizeof(json) - pos, "]}");
+    jsonAppend(json, sizeof(json), pos, "]}");
     json[pos] = '\0';
 
     WiFi.scanDelete();
     wsServer.broadcastTXT(json);
     Serial.printf("[WiFi] Scan complete: %d networks\n", n);
+}
+
+static void handleWifiScan() {
+    if (scanPending) {
+        Serial.println("[WiFi] Scan already in progress");
+        return;
+    }
+    Serial.println("[WiFi] Starting network scan...");
+    WiFi.scanDelete();          // clear any results left from a prior scan
+    WiFi.scanNetworks(true);    // async — result collected in wifiPortalUpdate()
+    scanPending = true;
+    scanStartMs = millis();
+}
+
+// Called from wifiPortalUpdate(). Returns as soon as the scan is still
+// running, so the loop keeps servicing WebSockets throughout.
+static void pollWifiScan() {
+    if (!scanPending) return;
+
+    int n = WiFi.scanComplete();
+    if (n == WIFI_SCAN_RUNNING) {
+        // Belt and braces: a scan that never reports back would otherwise
+        // block every future scan request for the rest of the session.
+        if (millis() - scanStartMs >= WIFI_SCAN_TIMEOUT) {
+            Serial.println("[WiFi] Scan timed out");
+            WiFi.scanDelete();
+            scanPending = false;
+            publishWifiScanResults(0);
+        }
+        return;
+    }
+
+    scanPending = false;
+    if (n == WIFI_SCAN_FAILED) {
+        Serial.println("[WiFi] Scan failed");
+        publishWifiScanResults(0);
+        return;
+    }
+    publishWifiScanResults(n);
 }
 
 static void handleWifiConnect(const char* ssid, const char* pass) {
@@ -1952,7 +2045,14 @@ void wifiPortalInit() {
     portalRunning = true;
 }
 
-void wifiPortalUpdate() {
+// Transport only: keep DNS, HTTP and the WebSocket alive. Deliberately
+// does NOT run the pending-wifi_connect screen handling that
+// wifiPortalUpdate() does, because this is called from inside blocking
+// loops (homing waits, inter-pour pauses, the battery-lockout modal) and
+// pushing or popping a screen from in there would nest a transition
+// inside another operation — the screen-stack corruption CLAUDE.md warns
+// about. Blocking code wants the phone kept alive, not the UI driven.
+void wifiPortalService() {
     if (!portalRunning) return;
 
     if (!staMode) {
@@ -1960,6 +2060,13 @@ void wifiPortalUpdate() {
     }
     webServer.handleClient();
     wsServer.loop();
+    pollWifiScan();
+}
+
+void wifiPortalUpdate() {
+    if (!portalRunning) return;
+
+    wifiPortalService();
 
 #ifndef HEADLESS_BUILD
     // --- Pending wifi_connect: push confirmation screen ---

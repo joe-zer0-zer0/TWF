@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.5.1"
+#define FW_VERSION  "1.5.2"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -171,12 +171,22 @@
 // --- Wi-Fi STA mode ---
 #define WIFI_STA_TIMEOUT        10000   // ms to wait for STA connection
 #define WIFI_MAX_SCAN_RESULTS   15      // cap network scan list
+#define WIFI_SCAN_TIMEOUT       20000   // ms before an async scan is abandoned
 #define NVS_NS_WIFI             "bfwifi"
 
 // --- OTA firmware updates ---
 #define OTA_MANIFEST_URL    "https://raw.githubusercontent.com/joe-zer0-zer0/TWF/master/release/version.json"
 #define OTA_CHECK_TIMEOUT   10000       // ms for manifest fetch
-#define OTA_DOWNLOAD_TIMEOUT 120000     // ms for binary download
+// HTTPClient::setTimeout() takes a uint16_t, so the old 120000 here
+// silently wrapped to 54464 ms — the "120 second" download timeout has
+// always actually been 54 seconds. 60000 is the honest value and is
+// within a whisker of the behaviour that has been shipping; overall
+// stall detection is OTA_STALL_TIMEOUT's job, not this one's.
+#define OTA_DOWNLOAD_TIMEOUT 60000      // ms for binary download (max 65535)
+// HTTPClient's timeout covers a socket that goes quiet, not one that stays
+// open and simply stops delivering. Without this the download loop spins
+// forever on a stalled connection and the only way out is a power cycle.
+#define OTA_STALL_TIMEOUT   30000       // ms of no progress before abort
 
 // Healthy uptime a freshly-installed image must accumulate before it
 // confirms itself and cancels bootloader rollback. Long enough to cover

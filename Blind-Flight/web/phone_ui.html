@@ -581,6 +581,14 @@ txf({a:'settings_set',k:k,v:v});
 function rh(){
 var v=$('v');
 if(!H){return;}
+if(H.sp){
+$('fc').style.display='none';
+var wcs=$('wc');if(wcs)wcs.style.display='none';
+v.innerHTML='<div class="st">Spinning...</div>'+
+'<div class="msg">Selecting a glass</div>'+
+'<div class="hint">Please wait</div>';
+return;
+}
 if(h2hSetup&&h2hSetup.step==='lobby'){rh2hSetup();return;}
 $('fc').style.display='none';
 var wc=$('wc');if(wc)wc.style.display='none';

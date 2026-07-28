@@ -9,6 +9,7 @@
 #include "settings.h"
 #include "battery.h"
 #include "persist.h"
+#include "wifi_portal.h"
 
 // ============================================================
 // Shared state between screens
@@ -293,6 +294,7 @@ bool runHomingSequence() {
         unsigned long waitStart = millis();
         while (millis() - waitStart < 300) {
             audioUpdate();
+            wifiPortalService();
             delay(1);
         }
 
@@ -311,6 +313,7 @@ bool runHomingSequence() {
             unsigned long doneWait = millis();
             while (millis() - doneWait < 800) {
                 audioUpdate();
+                wifiPortalService();
                 delay(1);
             }
             return true;
@@ -332,6 +335,11 @@ bool runHomingSequence() {
             bool retry = false;
             while (!retry) {
                 audioUpdate();
+                // This loop waits for a button press with no timeout, so
+                // without servicing the portal a homing failure silently
+                // takes every connected phone down with it until someone
+                // walks over to the device.
+                wifiPortalService();
                 inputUpdate();
                 InputEvent evt = inputGetEvent();
                 if (evt == INPUT_BTN_LEFT || evt == INPUT_BTN_RIGHT ||

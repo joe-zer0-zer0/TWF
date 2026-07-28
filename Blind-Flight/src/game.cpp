@@ -71,10 +71,15 @@ static bool homedThisFlight  = false;
 // Helpers
 // ============================================================
 
+// Blocking pause that keeps the tone sequencer running. It also has to
+// service the Wi-Fi portal: these pauses sit between spins during a pour
+// sequence, and without this a connected phone goes unanswered for the
+// whole of every dramatic pause, on top of the spins themselves.
 static void delayWithAudio(unsigned long ms) {
     unsigned long start = millis();
     while (millis() - start < ms) {
         audioUpdate();
+        wifiPortalService();
         delay(1);
     }
 }
@@ -567,7 +572,7 @@ static void drawChallengeResult(bool fullRedraw) {
     uiDrawSoftButtons("", "REVEAL");
 }
 
-static void showLockoutScreen() {
+void gameShowLockoutScreen() {
     TFT_eSPI* tft = uiGetTFT();
     tft->fillScreen(COL_BG);
     uiDrawTitleBar("LOW BATTERY", COL_ERROR);
@@ -579,6 +584,7 @@ static void showLockoutScreen() {
     flushInput();
     while (true) {
         audioUpdate();
+        wifiPortalService();
         inputUpdate();
         InputEvent evt = inputGetEvent();
         if (evt == INPUT_BTN_LEFT || evt == INPUT_ENC_CLICK || evt == INPUT_BTN_RIGHT) {
@@ -1093,7 +1099,7 @@ static void drawCountSelect(bool fullRedraw) {
 static void runPourCycle() {
 #ifndef HEADLESS_BUILD
     if (batteryIsLockout()) {
-        showLockoutScreen();
+        gameShowLockoutScreen();
         if (session.pourCount > 0) {
             motorDisable();
             flushInput();
@@ -1954,6 +1960,10 @@ const char* gameGetGlassName(int pourIdx) {
 
 bool gameIsSpinning() {
     return spinningNow;
+}
+
+void gameSetSpinning(bool spinning) {
+    spinningNow = spinning;
 }
 
 int gameGetRevealCount() {

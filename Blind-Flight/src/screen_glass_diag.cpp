@@ -253,7 +253,27 @@ static bool startRun() {
 // Screen callbacks
 // ============================================================
 
+// startRun() blocks for seconds and draws its own full-screen homing UI,
+// and on failure it needs to leave the screen. Neither can happen inside
+// onEnter(), which runs mid-transition — a uiPopScreenT() nested in a
+// push corrupts the screen stack (see CLAUDE.md). Both are deferred to
+// the first draw pass, matching the pattern in screen_motor_test.cpp.
+static bool pendingStart = false;
+static bool pendingExit  = false;
+
 static void diagDraw(bool fullRedraw) {
+    if (pendingStart) {
+        pendingStart = false;
+        if (!startRun()) pendingExit = true;
+        fullRedraw = true;
+    }
+
+    if (pendingExit) {
+        pendingExit = false;
+        uiPopScreenT(TRANS_WIPE_LEFT);
+        return;
+    }
+
     if (!fullRedraw) return;
     switch (diagState) {
         case DIAG_HOMING:    break;
@@ -334,9 +354,9 @@ static void diagInput(InputEvent evt) {
 
 static void diagOnEnter() {
     diagRunNum = 1;
-    if (!startRun()) {
-        uiPopScreenT(TRANS_WIPE_LEFT);
-    }
+    diagState  = DIAG_HOMING;
+    pendingStart = true;
+    pendingExit  = false;
 }
 
 const Screen screenGlassDiag = {
