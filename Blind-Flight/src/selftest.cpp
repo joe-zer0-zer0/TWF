@@ -57,7 +57,10 @@ static int wrapErr(int e) {
 static void serviceBreak() {
     if (sProgress) sProgress();
     audioUpdate();
-    wifiPortalUpdate();
+    // Service only, never wifiPortalUpdate(): the full tick pushes and
+    // pops screens for the pending-wifi_connect flow, and nesting that
+    // inside a blocking run corrupts the screen stack.
+    wifiPortalService();
 
     // loop() is blocked for the whole run, so without this every record
     // would carry the battery reading taken before the test started —
@@ -81,7 +84,7 @@ static void waitMs(unsigned long ms) {
     unsigned long start = millis();
     while (millis() - start < ms) {
         audioUpdate();
-        wifiPortalUpdate();
+        wifiPortalService();
         delay(2);
     }
 }
@@ -92,7 +95,7 @@ static void waitMs(unsigned long ms) {
 static void flushNotice() {
     wifiPortalBroadcastNow();
     for (int i = 0; i < 40; i++) {
-        wifiPortalUpdate();
+        wifiPortalService();
         delay(5);
     }
 }
@@ -398,6 +401,7 @@ void selfTestUpdate() {
 }
 
 bool selfTestIsRunning()        { return sRunning; }
+bool selfTestIsBusy()           { return sPending || sRunning; }
 int  selfTestCurrentPass()      { return sPassNum; }
 int  selfTestCurrentVisit()     { return sVisitNum; }
 int  selfTestCurrentGlass()     { return sGlass; }

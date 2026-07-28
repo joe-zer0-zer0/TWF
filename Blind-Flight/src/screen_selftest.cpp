@@ -28,12 +28,6 @@ enum StState { ST_CONFIRM, ST_RUNNING, ST_RESULTS };
 
 static StState stState = ST_CONFIRM;
 
-// selfTestRequest() only queues the run; loop() starts it on its next
-// pass. Without this latch the first draw after the request would see
-// "not running", conclude the test had finished, and flash an empty
-// results page before the carousel had moved at all.
-static bool stSawRunning = false;
-
 // ============================================================
 // Pages
 // ============================================================
@@ -186,8 +180,20 @@ static void drawResults() {
 // ============================================================
 
 static void stProgress() {
+    // The hook stays registered after this screen is popped, and the
+    // phone can start a run from anywhere, so check before painting —
+    // otherwise a phone-triggered run draws over whatever is on screen.
+    if (uiActiveScreen() != &screenSelfTest) return;
+
     if (selfTestIsRunning()) {
         drawRunning();
+    } else if (stState == ST_RUNNING) {
+        // The final call, made by selftest.cpp once the run has ended.
+        // This is where the results page goes up: the run blocks loop()
+        // from start to finish, so an ordinary draw pass never once sees
+        // the test running, and cannot detect the edge itself.
+        stState = ST_RESULTS;
+        drawResults();
     }
 }
 
@@ -196,16 +202,15 @@ static void stProgress() {
 // ============================================================
 
 static void stDraw(bool fullRedraw) {
-    // The run happens inside loop(), so by the time a draw pass gets
-    // here again the test has finished. Pick the results up rather
-    // than leaving the progress page on screen.
-    if (stState == ST_RUNNING) {
-        if (selfTestIsRunning()) {
-            stSawRunning = true;
-        } else if (stSawRunning) {
-            stState = ST_RESULTS;
-            fullRedraw = true;
-        }
+    // Backstop. stProgress() normally puts the results up as the run
+    // ends; this catches any path where it did not fire, so the screen
+    // can never be left stranded on the progress page with no working
+    // buttons. Testing busy rather than running matters: a request is
+    // queued in one loop() pass and executed in the next, and in that
+    // gap "not running" does not yet mean "finished".
+    if (stState == ST_RUNNING && !selfTestIsBusy()) {
+        stState = ST_RESULTS;
+        fullRedraw = true;
     }
 
     if (!fullRedraw) return;
@@ -225,7 +230,6 @@ static void stInput(InputEvent evt) {
                 if (selfTestRequest()) {
                     audioPlayTone(TONE_CONFIRM);
                     stState = ST_RUNNING;
-                    stSawRunning = false;
                     uiRequestRedraw();
                 } else {
                     audioPlayTone(TONE_ERROR);

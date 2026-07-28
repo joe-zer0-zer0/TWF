@@ -144,6 +144,12 @@ void selfTestUpdate();
 
 bool selfTestIsRunning();
 
+// True from the moment a run is requested until it has finished — i.e.
+// pending OR running. A caller that only checks selfTestIsRunning()
+// cannot tell "not started yet" from "already done", because the run is
+// queued in one loop() pass and executed in the next.
+bool selfTestIsBusy();
+
 // Live progress — valid while running.
 int  selfTestCurrentPass();     // 1-based, across both phases
 int  selfTestCurrentVisit();    // 1-based within the pass
