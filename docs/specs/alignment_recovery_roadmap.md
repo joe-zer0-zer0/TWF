@@ -7,6 +7,8 @@
 7b complete (v1.4.2/v1.4.3). 7j complete (already guarded in `ui.cpp`).
 Session 5 complete (v1.5.0) — `/log` is live; the roadmap now has a capture path.
 Session 9 shipped (v1.5.1) — diagnostics consolidated, auto self-test built, 7k fixed.
+Session 7 complete (v1.5.2) — independent correctness fixes; **no motor code
+touched, so a baseline captured on 1.5.1 stays valid against 1.5.2.**
 **Next: run the self-test and archive the baseline capture.**
 Session 3 must not start until that baseline is captured and archived.
 
@@ -383,7 +385,7 @@ rather than a follow-up.
 | 4 | **4** | Ramp / stop-speed → re-measure | 1.6.1 | **Opus 5** (4a/4b) |
 | 5 | **10** *(new)* | Teach-in per-glass calibration table | 1.7.0 | **Opus 5** |
 | 6 | **6** | Closed-loop correction | 1.7.1 | **Opus 5** |
-| — | **7** | Independent correctness fixes — **runs in parallel any time** | — | Sonnet 5 |
+| — | **7** | Independent correctness fixes — **DONE** | 1.5.2 | Sonnet 5 |
 | — | **8** | Motor task migration — deferred, elevated for headless | — | **Opus 5** |
 
 **Why measure before Session 3, not after.** A baseline taken on today's
@@ -920,12 +922,61 @@ position including backlash. Combined with CW-only motion from Session 3:
 
 ---
 
-### Session 7 — Independent correctness fixes
+### Session 7 — Independent correctness fixes — **DONE (v1.5.2, `300ea66`)**
 
 **Priority:** P1 for beta. No dependency on the mechanical work — **can run in
 parallel with Sessions 1–6.**
 **Model:** Sonnet 5 for all items.
-**Target version:** 1.6.1
+**Target version:** ~~1.6.1~~ → **1.5.2**
+
+**Deviations from the spec as written, and why:**
+
+- **Shipped as 1.5.2, not 1.6.1.** The spec assigned 1.6.1 to both this session
+  and Session 4. Since Session 7 touches no motor code and Session 3 owns 1.6.0,
+  a patch bump on the 1.5.x line keeps the 1.6.x numbers reserved for the motor
+  track. **No motor or geometry code was touched, so a v1.5.1 alignment baseline
+  remains valid against this build.**
+- **`buildStateJSON` was already guarded** and needed no change — its `JSON_REM`
+  / `JSON_PUT` macros already clamp, and it ends with an explicit
+  `if (pos >= bufLen) pos = bufLen - 1`. The `CLAUDE.md` gotcha claiming
+  otherwise is stale. Only the four functions named in 7a were unguarded.
+- **7a grew two items the spec did not list**, both found while converting the
+  builders. `buildAndBroadcastH2H` emitted player and bottle names through a raw
+  `%s`, so a phone-entered name containing `"` or `\` broke the JSON for every
+  connected client — hence `jsonAppendEscaped()`. And the two favorites builders
+  were byte-identical duplicates, now one `buildFavoritesJSON()`.
+- **7d is non-fatal, contrary to "enforce it against `Content-Length`."** Any
+  size mismatch that matters also fails the SHA-256 check, so aborting early buys
+  nothing but a faster failure — while adding a brand-new way for a *legitimate*
+  update to be refused (a proxy or CDN reporting a different `Content-Length`).
+  With USB access gone, a device that refuses good firmware has no way back. The
+  hash stays the single gate; the size is logged.
+- **7h needed a new function, not "one line each."** `wifiPortalUpdate()` calls
+  `uiPushScreenT` / `uiPopScreenT` for the pending-`wifi_connect` flow, so
+  calling it from inside a blocking loop would nest a screen transition inside
+  another operation — the exact corruption `CLAUDE.md` warns about. Added
+  `wifiPortalService()` (DNS/HTTP/WebSocket only, touches no screens) and used
+  that in the blocking loops. `wifiPortalUpdate()` remains the `loop()` entry
+  point.
+- **7f needed a transport change too.** Setting `spinningNow` alone fixes
+  nothing: the phone gates its spinning view on `S.a && S.sp`, and `gameIsActive()`
+  is false during H2H, so the field was never even emitted. The flag now also
+  travels in the `h2h` document, with a matching branch in `rh()` in
+  `phone_ui.html`.
+- **7i's snapshot validation went into `persistInit()`, not `persistLoadGame()`**,
+  so `persistGetPourCount()` and `persistGetModeName()` are covered by the same
+  check rather than only the load path.
+- **`settingsInit()` now writes back immediately** rather than just leaving
+  `sDirty` set. The headless build has no settings screen, and `settingsSave()`
+  is only ever called from UI paths, so a clamped value would otherwise never
+  reach NVS on that variant.
+
+**Found and fixed in passing (not in the original list):**
+`OTA_DOWNLOAD_TIMEOUT` was `120000` passed to `HTTPClient::setTimeout()`, which
+takes a `uint16_t` — it silently wrapped to **54464 ms**. The "120 second"
+download timeout has always actually been 54 seconds. Set to 60000 (the honest
+value, within a whisker of shipped behaviour); overall stall detection is
+`OTA_STALL_TIMEOUT`'s job. Surfaced as a compiler warning on the headless build.
 
 These are unrelated to alignment and were found during the same review.
 
