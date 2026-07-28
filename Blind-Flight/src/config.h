@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.5.3"
+#define FW_VERSION  "1.5.4"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -68,6 +68,22 @@
 #define MOTOR_MIN_SPEED     500     // microsteps/sec at start/end (raised from 400 for torque margin)
 #define MOTOR_ACCEL         1600    // microsteps/sec² — halved from 3200 to reduce lost steps under load
 #define HOMING_SPEED        400     // microsteps/sec — slow for homing
+
+// --- Hall noise rejection during homing (v1.5.4) ---
+// The real magnet measures 51-53 microsteps wide at HOMING_SPEED, very
+// consistently across runs. A 2026-07-28 capture recorded two homings
+// that reported a width of 1 and returned SUCCESS: a single noise spike
+// on the Hall line was accepted as the magnet, anchoring the disc ~78°
+// out with nothing downstream able to notice.
+//
+// Two independent guards, because either alone leaves a hole. The
+// confirm count rejects spikes shorter than the sampling window; the
+// width floor catches anything that survives it. 20 sits far below the
+// observed 51 (so a genuinely weak magnet read still homes) and far
+// above the 1 that got through.
+#define HOME_MAGNET_WIDTH_MIN   20      // microsteps; narrower = noise
+#define HOME_HALL_CONFIRM       4       // consecutive agreeing reads at an edge
+#define HOME_HALL_CONFIRM_US    40      // spacing between those reads
 
 // --- Manual nudge (Session 2, v1.4.1) ---
 // Nudges are short bursts from a dead stop, so they get no acceleration ramp.

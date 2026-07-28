@@ -367,6 +367,16 @@ static void editApply() {
             settingsSetOffDelay(editValue);
             break;
     }
+
+    // Persist on apply, not only on the way out. settingsSave() used to
+    // be reached solely from the left-button handler, so any exit that
+    // skipped it — long-press home, the idle timeout — silently
+    // discarded the change. Wi-Fi was the visible casualty: it defaults
+    // to false, so an unsaved toggle came back OFF at the next boot
+    // rather than reverting to its previous value. settingsSave() is a
+    // no-op unless something is dirty, so the extra call is free.
+    settingsSave();
+
     editMode = false;
 }
 

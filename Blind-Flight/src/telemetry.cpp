@@ -3,6 +3,7 @@
 #include "config.h"
 
 #include <Preferences.h>
+#include <esp_system.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -153,8 +154,27 @@ void telemetryInit() {
     p.putUInt("run", sRunId);
     p.end();
 
-    telemetryPrintf("# boot run=%lu fw=%s ring=%d",
-                    (unsigned long)sRunId, FW_VERSION, TELEM_RING_BYTES);
+    // Reset reason distinguishes an ordinary power cycle from a
+    // brownout, a panic or a watchdog. Without it a rebooted device is
+    // indistinguishable from one the user simply switched off, and the
+    // ring buffer it cleared looks like a short session rather than a
+    // fault. POWERON/SW are benign; BROWNOUT/PANIC/WDT are not.
+    const char* why;
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:  why = "POWERON";  break;
+        case ESP_RST_SW:       why = "SW";       break;   // esp_restart(), e.g. after OTA
+        case ESP_RST_PANIC:    why = "PANIC";    break;
+        case ESP_RST_INT_WDT:  why = "INT_WDT";  break;
+        case ESP_RST_TASK_WDT: why = "TASK_WDT"; break;
+        case ESP_RST_WDT:      why = "WDT";      break;
+        case ESP_RST_BROWNOUT: why = "BROWNOUT"; break;
+        case ESP_RST_DEEPSLEEP:why = "DEEPSLEEP";break;
+        case ESP_RST_EXT:      why = "EXT";      break;
+        default:               why = "UNKNOWN";  break;
+    }
+
+    telemetryPrintf("# boot run=%lu fw=%s ring=%d reset=%s",
+                    (unsigned long)sRunId, FW_VERSION, TELEM_RING_BYTES, why);
 }
 
 uint32_t telemetryGetRunId()        { return sRunId; }

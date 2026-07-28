@@ -28,6 +28,10 @@
 #define HOME_FAIL_STUCK_ON_MAGNET   1   // Phase 1: never left the magnet
 #define HOME_FAIL_MAGNET_NOT_FOUND  2   // Phase 2: no leading edge in 1.5 rev
 #define HOME_FAIL_MAGNET_TOO_WIDE   3   // Phase 3: no trailing edge within 90°
+// Not a failure: a Hall pulse too narrow to be the magnet was rejected
+// and the scan resumed. Logged so the noise rate stays visible — a run
+// that homes correctly after three of these is telling us something.
+#define HOME_NOTE_GLITCH_REJECTED   4
 
 void motorInit();
 

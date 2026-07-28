@@ -49,8 +49,9 @@ void telemetryPrintf(const char* fmt, ...);
 // --- Structured records ---
 
 // failPhase: 0 = success, 1 = stuck on magnet, 2 = magnet not found,
-// 3 = magnet wider than one glass. attempt is 0-based within one
-// runHomingSequence() call.
+// 3 = magnet wider than one glass, 4 = narrow pulse rejected as noise
+// (informational — the scan continued and a later record reports the
+// outcome). attempt is 0-based within one runHomingSequence() call.
 void telemetryLogHoming(int magnetWidth, int attempt, int failPhase);
 
 // One record per Hall crossing seen during a verified spin.

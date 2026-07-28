@@ -1927,6 +1927,7 @@ static void handleLog() {
         "#\n"
         "# H,run,ms,mV,magnetWidth,attempt,failPhase\n"
         "#   failPhase: 0=ok 1=stuck-on-magnet 2=not-found 3=too-wide\n"
+        "#              4=narrow pulse rejected as noise, scan continued\n"
         "# X,run,ms,mV,glass,crossIdx,expected,actual,drift\n"
         "#   drift = actual - expected steps to the Hall leading edge\n"
         "# M,run,ms,mV,from,to,dir,steps\n"

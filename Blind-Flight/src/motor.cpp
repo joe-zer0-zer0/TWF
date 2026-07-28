@@ -287,6 +287,22 @@ void motorInit() {
 // Sets position 0 at the magnet center.
 // ============================================================
 
+// Read the Hall line and require several consecutive samples to agree
+// before believing an edge. The line is single-ended and runs alongside
+// the motor leads, and a switching stepper couples short spikes onto
+// it; one digitalRead() was all it took to declare the magnet found,
+// which is how a 1-microstep "magnet" got accepted. A real edge holds
+// for tens of milliseconds at HOMING_SPEED, so the confirmation window
+// (~120 us) is far too short to smear it — and the cost is paid only at
+// an apparent edge, since a disagreeing sample returns immediately.
+static bool hallStable(int level) {
+    for (int i = 0; i < HOME_HALL_CONFIRM; i++) {
+        if (digitalRead(PIN_HALL) != level) return false;
+        if (i + 1 < HOME_HALL_CONFIRM) delayMicroseconds(HOME_HALL_CONFIRM_US);
+    }
+    return true;
+}
+
 bool motorHome(int attempt) {
     motorEnable();
 
@@ -308,48 +324,78 @@ bool motorHome(int attempt) {
         }
     }
 
-    // --- Phase 2: Scan CW for leading edge ---
+    // --- Phases 2 and 3: find the magnet and measure it ---
+    // These are one loop rather than two straight-line phases because a
+    // candidate can now be rejected. A noise pulse costs the few steps
+    // spent measuring it and the scan carries on from there, which is
+    // much cheaper than failing the whole attempt and re-homing.
     digitalWrite(PIN_MOTOR_DIR, MOTOR_CW_DIR);
     delayMicroseconds(10);
 
-    int maxSteps = MICROSTEPS_PER_REV + MICROSTEPS_PER_REV / 2;
-    bool found = false;
-    for (int i = 0; i < maxSteps; i++) {
-        if (digitalRead(PIN_HALL) == LOW) {
-            found = true;
-            break;
+    const int maxSteps = MICROSTEPS_PER_REV + MICROSTEPS_PER_REV / 2;
+    int  stepsUsed   = 0;
+    int  magnetWidth = 0;
+    int  glitches    = 0;
+    bool haveMagnet  = false;
+
+    while (!haveMagnet && stepsUsed < maxSteps) {
+
+        // --- Phase 2: Scan CW for leading edge ---
+        bool found = false;
+        while (stepsUsed < maxSteps) {
+            if (hallStable(LOW)) { found = true; break; }
+            stepMotor();
+            delayMicroseconds(1000000 / HOMING_SPEED);
+            stepsUsed++;
+            if ((stepsUsed & 0xFF) == 0) yield();
         }
-        stepMotor();
-        delayMicroseconds(1000000 / HOMING_SPEED);
-        if ((i & 0xFF) == 0) yield();
+        if (!found) break;
+
+        // --- Phase 3: Continue CW to trailing edge ---
+        // Count how many steps the Hall stays active = magnet width.
+        magnetWidth = 0;
+        bool exitedMagnet = false;
+        for (int i = 0; i < MICROSTEPS_PER_GLASS && stepsUsed < maxSteps; i++) {
+            stepMotor();
+            delayMicroseconds(1000000 / HOMING_SPEED);
+            stepsUsed++;
+            magnetWidth++;
+            if (hallStable(HIGH)) {
+                exitedMagnet = true;
+                break;
+            }
+            if ((i & 0xFF) == 0) yield();
+        }
+
+        if (!exitedMagnet) {
+            // Ran out of scan budget mid-pulse: report that as not
+            // found, which is what it is — do not blame the magnet.
+            if (stepsUsed >= maxSteps) break;
+
+            // Magnet wider than 90° — something is wrong
+            Serial.printf("[Motor] Homing FAIL: magnet wider than %d steps\n",
+                          MICROSTEPS_PER_GLASS);
+            telemetryLogHoming(magnetWidth, attempt, HOME_FAIL_MAGNET_TOO_WIDE);
+            return false;
+        }
+
+        if (magnetWidth >= HOME_MAGNET_WIDTH_MIN) {
+            haveMagnet = true;
+        } else {
+            // Too narrow to be the magnet. The Hall line has already
+            // gone inactive, so the outer loop resumes scanning from
+            // here. Recorded rather than silently swallowed: the noise
+            // rate is data we want.
+            glitches++;
+            Serial.printf("[Motor] Homing: rejected %d-step pulse as noise (%d so far)\n",
+                          magnetWidth, glitches);
+            telemetryLogHoming(magnetWidth, attempt, HOME_NOTE_GLITCH_REJECTED);
+        }
     }
 
-    if (!found) {
+    if (!haveMagnet) {
         Serial.println("[Motor] Homing FAIL: magnet not found in 1.5 revolutions");
         telemetryLogHoming(0, attempt, HOME_FAIL_MAGNET_NOT_FOUND);
-        return false;
-    }
-
-    // --- Phase 3: Continue CW to trailing edge ---
-    // Count how many steps the Hall stays active = magnet width.
-    int magnetWidth = 0;
-    bool exitedMagnet = false;
-    for (int i = 0; i < MICROSTEPS_PER_GLASS; i++) {
-        stepMotor();
-        delayMicroseconds(1000000 / HOMING_SPEED);
-        magnetWidth++;
-        if (digitalRead(PIN_HALL) == HIGH) {
-            exitedMagnet = true;
-            break;
-        }
-        if ((i & 0xFF) == 0) yield();
-    }
-
-    if (!exitedMagnet) {
-        // Magnet wider than 90° — something is wrong
-        Serial.printf("[Motor] Homing FAIL: magnet wider than %d steps\n",
-                      MICROSTEPS_PER_GLASS);
-        telemetryLogHoming(magnetWidth, attempt, HOME_FAIL_MAGNET_TOO_WIDE);
         return false;
     }
 
