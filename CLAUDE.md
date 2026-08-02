@@ -60,22 +60,27 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 
 ## Current State
 
-* **Friction fix:** PTFE furniture pads confirmed working in initial testing. Carrier plate (attaches to top of motor) currently in physical prototyping. Ball transfer units at 120° spacing remain the fallback if needed.
-* **Six bugs fixed** in the last bug-fix session (nine files): spin speed presets read correctly; transitions no longer override brightness; motor holding current released after moves; motor test screen reachable; `randomSeed()` moved off ADC2/strapping pin; homing retry converted from unbounded recursion to a loop.
+* **Released firmware: v1.5.4.** Master is clean and `release/version.json` matches the published asset.
+* **Mechanical (in progress, Jeremy's bench):** PTFE furniture pads confirmed working in initial testing. Carrier plate (attaches to top of motor) and set-screw placement/materials currently in physical prototyping. Ball transfer units at 120° spacing remain the fallback if needed. Final battery/charging part selection also open.
+* **Alignment baseline — read before planning motor work.** The Session 9 auto-diag capture archived at `docs/baselines/selftest_baseline_2026-07-28_fw1.5.2.log` came back **inside the roadmap's goal thresholds**: interGlassSpread=3, worstScatter=3, accumMax=1, 24 reads / 0 failed. Per-position means were `+1, +1, -2, 0` — **glass 4 was not the worst**, contradicting the impression that drove the alignment roadmap. The run is **unloaded** (the auto-diag requires glasses off — many revolutions at speed), so the residual error users could identify at the event is most likely load-dependent, pointing at the mechanical work above rather than at firmware.
 * **Pour-side selection** — fully implemented. Settings menu item cycles Front/Right/Rear/Left, NVS-persistent, runtime offset applied to all motor glass positioning.
-* **Ranked Flight mode (`GAME\_MODE\_RANK`)** — spec in `docs/specs/ranked_flight_spec.md`.
+* **Shipped game modes:** Basic, Named, Best Guess, Ranked, Guess+Rank, Twin Pour (`GAME\_MODE\_DUPLICATE`), Find the Ringer (`GAME\_MODE\_DECOY`), Head-to-Head (all three sub-modes). Also shipped: favorites list, library metadata (proof / price tier / age) + star-rating round, STA mode + mDNS, OTA, telemetry `/log`, auto self-test, battery indicator with low-battery warning and lockout, NVS-persistent home-offset calibration.
 
 ## Roadmap
 
-1. OTA firmware updates via Wi-Fi (`/update` route) — needed for beta logistics; requires compatible partition table
-2. Pour animation (procedural: glass outline drawn in code, filled with amber rectangle — no flash cost)
-3. Low-battery warning on home screen
-4. Home offset calibration as NVS-persistent per-unit setting (adjustment after Hall trigger)
-5. Whiskey library expansion
-6. Phone/WebSocket parity for Ranked Flight (deferred, same pattern as Best Guess parity)
+**Open work — none of it blocked by the mechanical prototyping except where noted.**
+
+1. **Alignment Session 3** — CW-only motion + homing hardening (target v1.6.0). Spec: `docs/specs/alignment_recovery_roadmap.md`. **Timing-sensitive:** its acceptance test compares against the archived baseline, which was captured on the *current* shaft coupling. Changing the set screw first invalidates that comparison — either run Session 3 before the mechanical change lands, or budget a re-baseline after it.
+2. **Shareable results card** — spec in `docs/specs/share_card_spec.md`, Phase 1 (rank-aware payload + poster-styled phone results view) not started. Phone UI + `wifi\_portal.cpp` only; zero hardware dependency.
+3. **Pour animation** (procedural: glass outline drawn in code, filled with amber rectangle — no flash cost)
+4. **Session 8 — motor task migration.** Deferred, but elevated for the headless build: a blocking motor loop is indistinguishable from a hung device with no screen, and it is the one failure mode the OTA rollback net cannot catch (it catches crashes, not hangs).
+5. **Headless status LED** (WS2812B) — the one unbuilt piece of `docs/specs/phone_only_architecture.md`; the two-environment build split itself is done.
+6. Whiskey library expansion
 7. Validate pour-side selection during beta
 8. Deferred Session 14 polish items
 9. Web animation of logo SVG (standalone; CSS `stroke-dashoffset` + `offset-path`; independent of firmware)
+
+**Battery/charging note:** nothing firmware-side is blocked by the pack decision, but do not finalize the warn/lockout percentages until the pack is chosen — the current pack sagged 8003 → 6958 mV across a single 2-minute diag run. The 2S pack still charges on series total with no per-cell balancing; that remains an open safety item before beta events.
 
 \---
 
