@@ -283,10 +283,15 @@ static void buildRevealMap() {
 // ============================================================
 
 static void runH2HPourCycle() {
-#ifndef HEADLESS_BUILD
     if (batteryIsLockout()) {
         Serial.println("[H2H] Battery lockout during pour");
+#ifndef HEADLESS_BUILD
         gameShowLockoutScreen();
+#else
+        // See the matching note in game.cpp's runPourCycle(): no modal
+        // and no dismiss button here, but the guard still has to run.
+        audioPlayTone(TONE_ERROR);
+#endif
 
         // A bare return used to leave `phase` untouched. From the lobby
         // that made the start button look dead; mid-flight it was worse —
@@ -309,7 +314,6 @@ static void runH2HPourCycle() {
         wifiPortalBroadcastNow();
         return;
     }
-#endif
 
     uiResetIdleTimer();
 

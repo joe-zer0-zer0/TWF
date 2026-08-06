@@ -6,6 +6,9 @@
 #include "favorites.h"
 #include "device_id.h"
 #include "settings.h"
+#include "motor.h"
+#include "ota.h"
+#include "audio.h"
 #include "transitions.h"
 #include "telemetry.h"
 #include "battery.h"
@@ -821,9 +824,14 @@ static int buildStateJSON(char* buf, int bufLen) {
     bool active = gameIsActive();
 
     if (!active) {
-        return snprintf(buf, bufLen, "{\"a\":false,\"sta\":%s,\"serial\":\"%s\",\"n\":%d}",
+        return snprintf(buf, bufLen,
+                        "{\"a\":false,\"sta\":%s,\"serial\":\"%s\",\"n\":%d,"
+                        "\"bp\":%d,\"bl\":%s,\"bk\":%s}",
                         staMode ? "true" : "false", deviceGetSerial(),
-                        settingsGetGlassCount());
+                        settingsGetGlassCount(),
+                        batteryGetPercent(),
+                        batteryIsLow()     ? "true" : "false",
+                        batteryIsLockout() ? "true" : "false");
     }
 
     GameState gs = gameGetState();
@@ -862,8 +870,12 @@ static int buildStateJSON(char* buf, int bufLen) {
     int pos = 0;
 
     pos += snprintf(buf + pos, JSON_REM,
-        "{\"a\":true,\"s\":\"%s\",\"m\":\"%s\",\"p\":%d,\"sta\":%s",
-        sc, mc, pc, staMode ? "true" : "false");
+        "{\"a\":true,\"s\":\"%s\",\"m\":\"%s\",\"p\":%d,\"sta\":%s"
+        ",\"bp\":%d,\"bl\":%s,\"bk\":%s",
+        sc, mc, pc, staMode ? "true" : "false",
+        batteryGetPercent(),
+        batteryIsLow()     ? "true" : "false",
+        batteryIsLockout() ? "true" : "false");
 
     if (gameIsSpinning()) {
         pos += snprintf(buf + pos, JSON_REM, ",\"sp\":true");
@@ -1114,28 +1126,165 @@ static void broadcastFavoritesJSON() {
 // Settings JSON
 // ============================================================
 
-static void sendSettingsJSON(uint8_t clientNum) {
-    char json[128];
-    snprintf(json, sizeof(json),
+// One builder, two senders — these were duplicated snprintf calls that had
+// to be kept in step by hand, which is how a new field gets added to the
+// "get" path and forgotten on the "set" broadcast.
+static int buildSettingsJSON(char* buf, int bufLen) {
+    return snprintf(buf, bufLen,
         "{\"t\":\"settings\",\"gc\":%d,\"pour\":%d,\"spd\":%d,"
-        "\"snd\":%s,\"vol\":%d,\"brt\":%d}",
+        "\"snd\":%s,\"vol\":%d,\"brt\":%d,\"ho\":%d,\"fw\":\"%s\"}",
         settingsGetGlassCount(), settingsGetPourSide(),
         settingsGetSpinSpeed(),
         settingsGetSoundOn() ? "true" : "false",
-        settingsGetVolume(), settingsGetBrightness());
+        settingsGetVolume(), settingsGetBrightness(),
+        settingsGetHomeOffset(), FW_VERSION);
+}
+
+static void sendSettingsJSON(uint8_t clientNum) {
+    char json[192];
+    buildSettingsJSON(json, sizeof(json));
     wsServer.sendTXT(clientNum, json);
 }
 
 static void broadcastSettingsJSON() {
-    char json[128];
-    snprintf(json, sizeof(json),
-        "{\"t\":\"settings\",\"gc\":%d,\"pour\":%d,\"spd\":%d,"
-        "\"snd\":%s,\"vol\":%d,\"brt\":%d}",
-        settingsGetGlassCount(), settingsGetPourSide(),
-        settingsGetSpinSpeed(),
-        settingsGetSoundOn() ? "true" : "false",
-        settingsGetVolume(), settingsGetBrightness());
+    char json[192];
+    buildSettingsJSON(json, sizeof(json));
     wsServer.broadcastTXT(json);
+}
+
+// ============================================================
+// OTA from the phone
+// ============================================================
+// The headless build excludes screen_ota.cpp, so without this there is no
+// way to update an assembled unit at all — and the USB port is not
+// reachable once the enclosure is closed. Both builds get it; on the
+// screen build it is a convenience, on the headless build it is the only
+// firmware delivery path there is.
+//
+// This follows the self-test pattern rather than trying to stream
+// progress: announce what is about to happen, flush that frame, then
+// block. otaPerformUpdate() does not service the socket, so anything sent
+// after it starts will not leave the device until the download is done —
+// which is exactly too late. Deliberately no wifiPortalService() from
+// inside the progress callback: that would re-enter this command handler
+// mid-flash, and a second ota_start arriving during a write is not a
+// failure mode worth having.
+
+static OtaUpdateInfo phoneOtaInfo;
+static bool          phoneOtaBusy = false;
+
+// phase: "checking" | "avail" | "none" | "installing" | "err"
+static void broadcastOtaJSON(const char* phase, const char* detail) {
+    char buf[512];
+    int  pos = 0;
+    jsonAppend(buf, sizeof(buf), pos, "{\"t\":\"ota\",\"ph\":\"%s\"", phase);
+
+    if (phoneOtaInfo.available && phoneOtaInfo.version[0]) {
+        jsonAppend(buf, sizeof(buf), pos, ",\"v\":\"");
+        jsonAppendEscaped(buf, sizeof(buf), pos, phoneOtaInfo.version);
+        jsonAppend(buf, sizeof(buf), pos, "\",\"sz\":%lu,\"notes\":\"",
+                   (unsigned long)phoneOtaInfo.size);
+        jsonAppendEscaped(buf, sizeof(buf), pos, phoneOtaInfo.notes);
+        jsonAppendChar(buf, sizeof(buf), pos, '"');
+    }
+    if (detail && detail[0]) {
+        jsonAppend(buf, sizeof(buf), pos, ",\"e\":\"");
+        jsonAppendEscaped(buf, sizeof(buf), pos, detail);
+        jsonAppendChar(buf, sizeof(buf), pos, '"');
+    }
+    jsonAppend(buf, sizeof(buf), pos, ",\"fw\":\"%s\"}", FW_VERSION);
+
+    buf[(pos < (int)sizeof(buf)) ? pos : (int)sizeof(buf) - 1] = '\0';
+    wsServer.broadcastTXT(buf);
+}
+
+// Push a frame out before entering a blocking call — same idiom as
+// selftest.cpp's flushNotice().
+static void flushOtaNotice() {
+    for (int i = 0; i < 40; i++) {
+        wifiPortalService();
+        delay(5);
+    }
+}
+
+static void otaProgressSerial(uint32_t progress, uint32_t total) {
+    static uint32_t lastPct = 999;
+    uint32_t pct = total ? (progress * 100UL / total) : 0;
+    if (pct != lastPct && pct % 10 == 0) {
+        lastPct = pct;
+        Serial.printf("[OTA] %lu%%\n", (unsigned long)pct);
+    }
+}
+
+static void handleOtaCheck() {
+    if (phoneOtaBusy) return;
+    phoneOtaBusy = true;
+
+    memset(&phoneOtaInfo, 0, sizeof(phoneOtaInfo));
+    broadcastOtaJSON("checking", nullptr);
+    flushOtaNotice();
+
+    char err[128] = "";
+    bool ok = otaCheckForUpdate(OTA_MANIFEST_URL, phoneOtaInfo,
+                                err, sizeof(err));
+    if (!ok) {
+        memset(&phoneOtaInfo, 0, sizeof(phoneOtaInfo));
+        broadcastOtaJSON("err", err[0] ? err : "Check failed");
+    } else if (phoneOtaInfo.available) {
+        broadcastOtaJSON("avail", nullptr);
+    } else {
+        broadcastOtaJSON("none", nullptr);
+    }
+    phoneOtaBusy = false;
+}
+
+static void handleOtaStart() {
+    if (phoneOtaBusy) return;
+    if (!phoneOtaInfo.available || !phoneOtaInfo.url[0]) {
+        broadcastOtaJSON("err", "Run a check first");
+        return;
+    }
+    // Refuse on a flat pack. A brownout partway through a flash write is
+    // the one way to lose both partitions at once.
+    if (batteryIsLockout()) {
+        broadcastOtaJSON("err", "Battery too low to update");
+        return;
+    }
+    if (gameIsActive() || h2hIsActive()) {
+        broadcastOtaJSON("err", "Finish the flight first");
+        return;
+    }
+    phoneOtaBusy = true;
+
+    broadcastOtaJSON("installing", nullptr);
+    flushOtaNotice();
+
+    // Detach the buzzer from LEDC before flash writes — the peripheral can
+    // glitch during OTA and pull the pin LOW, which is ON for the inverted
+    // MH-FMD module. Hold HIGH = transistor off = silent. (Same reason as
+    // screen_ota.cpp; on a headless unit nobody can see why it is
+    // screaming, so it matters more here.)
+    audioStopTone();
+    ledcDetachPin(PIN_BUZZER);
+    pinMode(PIN_BUZZER, OUTPUT);
+    digitalWrite(PIN_BUZZER, HIGH);
+
+    char err[128] = "";
+    bool ok = otaPerformUpdate(phoneOtaInfo.url, phoneOtaInfo.size,
+                               phoneOtaInfo.sha256,
+                               otaProgressSerial,
+                               err, sizeof(err));
+    if (ok) {
+        Serial.println("[OTA] Update written — rebooting");
+        broadcastOtaJSON("done", nullptr);
+        flushOtaNotice();
+        delay(500);
+        ESP.restart();
+    }
+
+    Serial.printf("[OTA] Update failed: %s\n", err);
+    phoneOtaBusy = false;
+    broadcastOtaJSON("err", err[0] ? err : "Update failed");
 }
 
 // ============================================================
@@ -1516,6 +1665,21 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
         return;
     }
 
+    // --- OTA ---
+    // Below the self-test guard on purpose: an OTA blocks for the length
+    // of a download and ends in a reboot, which is not something to start
+    // underneath a carousel that is already moving.
+    if (action == "ota_check") {
+        Serial.println("[WiFi] Phone: OTA check");
+        handleOtaCheck();
+        return;
+    }
+    if (action == "ota_start") {
+        Serial.println("[WiFi] Phone: OTA install");
+        handleOtaStart();
+        return;
+    }
+
     // --- Button actions ---
     if (action == "right") {
         Serial.println("[WiFi] Phone: right");
@@ -1671,14 +1835,36 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
         if (!vvPtr) return;
         int val = atoi(vvPtr + 4);
 
+        // Settings that the motor caches must be pushed into motor.cpp as
+        // well as stored, or they take effect only after a reboot. The
+        // screen build does this in screen_settings.cpp on apply; this path
+        // used to store and stop, which on a headless unit meant pour side
+        // and spin speed could never actually be changed.
         if (key == "gc")        settingsSetGlassCount(val);
-        else if (key == "pour") settingsSetPourSide(val);
-        else if (key == "spd")  settingsSetSpinSpeed(val);
+        else if (key == "pour") {
+            settingsSetPourSide(val);
+            motorSetPourSide(settingsGetPourSide());
+        }
+        else if (key == "spd") {
+            settingsSetSpinSpeed(val);
+            motorSetSpinSpeed(settingsGetSpinSpeed());
+        }
         else if (key == "snd")  settingsSetSoundOn(val != 0);
         else if (key == "vol")  settingsSetVolume(val);
         else if (key == "brt") {
             settingsSetBrightness(val);
             setBacklight(BRIGHT_MAP[settingsGetBrightness()]);
+        }
+        // Home offset — the headless equivalent of the calibration screen.
+        // settingsSetHomeOffset() clamps to ±200 microsteps, so read the
+        // stored value back rather than trusting what the phone sent.
+        // Any flight in progress has its homing invalidated: the offset it
+        // was positioned against no longer applies.
+        else if (key == "ho") {
+            settingsSetHomeOffset((int16_t)val);
+            motorSetHomeOffset(settingsGetHomeOffset());
+            gameInvalidateHoming();
+            h2hInvalidateHoming();
         }
         else return;
 

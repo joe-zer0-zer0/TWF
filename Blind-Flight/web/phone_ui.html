@@ -86,7 +86,7 @@ margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;alig
 </div>
 <div class="card" id="pa" style="display:none">
 <div class="st">Enter PIN</div>
-<div class="hint" style="margin-bottom:12px">Shown on the device screen</div>
+<div class="hint" style="margin-bottom:12px">Shown on the device screen, or printed on the device label</div>
 <input type="text" id="pp" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="4-digit PIN" style="text-align:center;font-size:28px;letter-spacing:8px">
 <div id="pe" class="ferr" style="display:none"></div>
 <button class="btn bp" onclick="doAuth()">CONNECT</button>
@@ -95,6 +95,7 @@ margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;alig
 <div class="card" id="wc" style="display:none"></div>
 <div class="card" id="fc" style="display:none"></div>
 <div class="card" id="sc" style="display:none"></div>
+<div class="card" id="oc" style="display:none"></div>
 <script>
 var S=null,ws=null,lk=false,F=null,fOpen=false;
 var H=null,HY=null,HR=null,HJ=false,HN='';
@@ -105,6 +106,7 @@ var h2hSetup=null;
 var SET=null,sOpen=false;
 var gpMode=null,gpGc=0;
 var dgAsk=false;
+var OTA=null,oOpen=false;
 function doAuth(){
 var p=$('pp');if(!p)return;
 var v=p.value.trim();if(v.length!==4){$('pe').textContent='Enter 4 digits';$('pe').style.display='';return;}
@@ -124,7 +126,10 @@ else{$('pa').style.display='';$('v').style.display='none';$('pp').focus();}
 ws.onclose=function(){
 $('cd').className='cdot coff';$('cs').textContent='Reconnecting...';
 S=null;F=null;H=null;HY=null;HR=null;HJ=false;lk=false;hg0=-1;hg1=-1;hClaim=0;authed=false;h2hSetup=null;
-$('pa').style.display='none';$('v').style.display='none';
+$('pa').style.display='none';$('v').style.display='none';$('oc').style.display='none';
+// Deliberately NOT clearing OTA: the socket always drops when the device
+// reboots into the new image, and keeping the last phase lets the card
+// still say what happened once it comes back.
 rn();rfav();setTimeout(cn,2000);
 };
 ws.onmessage=function(e){
@@ -142,6 +147,7 @@ $('pe').textContent='Wrong PIN';$('pe').style.display='';$('pp').value='';$('pp'
 return;}
 if(d.t==='favs'){F=d;lk=false;rfav();return;}
 if(d.t==='settings'){SET=d;lk=false;rset();return;}
+if(d.t==='ota'){OTA=d;lk=false;oOpen=true;rota();return;}
 if(d.t==='h2h'){H=d;lk=false;rh();return;}
 if(d.t==='h2h_you'){HY=d;lk=false;rh();return;}
 if(d.t==='h2h_result'){HR=d;lk=false;rh();return;}
@@ -152,7 +158,7 @@ if(d.t==='wifi_status'){lk=false;
 if(d.ok){wMsg='Connected! IP: '+d.ip;wSta=true;}
 else{wMsg='Connection failed';}
 rwifi();return;}
-S=d;lk=false;rn();showFavCard();showWifiCard();showSetCard();
+S=d;lk=false;rn();showFavCard();showWifiCard();showSetCard();showOtaCard();
 }catch(x){}
 };
 }
@@ -210,8 +216,17 @@ var wc1=$('wc');if(wc1)wc1.style.display='none';
 $('sc').style.display='none';
 return;
 }
+// A lockout has to say so here. On a headless unit this card is the
+// only place the refusal is visible — the device just declines to pour.
+if(S.bk){
+v.innerHTML='<div class="st" style="color:#F44336">Battery Too Low</div>'+
+'<div class="msg">Charge the device before pouring</div>'+
+'<div class="hint">'+batt()+'</div>';
+return;
+}
 v.innerHTML='<div class="st">Ready</div>'+
 '<div class="msg">Start a flight</div>'+
+'<div class="hint" style="margin-bottom:12px">'+batt()+'</div>'+
 '<button class="btn bp" onclick="gpick(\'B\')">Basic Flight</button>'+
 '<button class="btn bp" onclick="gpick(\'N\')">Named Flight</button>'+
 '<button class="btn bp" onclick="gpick(\'G\')">Best Guess</button>'+
@@ -564,6 +579,15 @@ h+=sr('Spin Speed',['Fast','Normal','Theatr.'],SET.spd,'spd');
 h+=sr('Sound',['Off','On'],SET.snd?1:0,'snd');
 if(SET.snd)h+=sr('Volume',['0','1','2','3','4'],SET.vol,'vol');
 h+=sr('Brightness',['1','2','3','4','5'],SET.brt,'brt');
+h+='<hr class="sep"><div style="font-size:13px;color:#888;margin-bottom:4px">Pour Alignment</div>';
+h+='<div class="gsel">';
+h+='<div class="gbtn" onclick="ho(-20)">&minus;20</div>';
+h+='<div class="gbtn" onclick="ho(-5)">&minus;5</div>';
+h+='<div class="gbtn" style="background:#2a2210;border-color:#D4A547">'+((SET.ho||0)>0?'+':'')+(SET.ho||0)+'</div>';
+h+='<div class="gbtn" onclick="ho(5)">+5</div>';
+h+='<div class="gbtn" onclick="ho(20)">+20</div>';
+h+='</div>';
+h+='<div class="hint">Microsteps from the home magnet. Positive moves the glass clockwise under the spout. Takes effect on the next pour.</div>';
 }
 sc.innerHTML=h;
 }
@@ -577,6 +601,69 @@ return h+'</div></div>';
 }
 function ss(k,v){
 txf({a:'settings_set',k:k,v:v});
+}
+// Home-offset trim. This is the phone's stand-in for the calibration
+// screen: on a headless unit it is the only way to correct pour
+// alignment, so it nudges rather than exposing a raw number field.
+function ho(d){
+if(!SET)return;
+var v=(SET.ho||0)+d;
+if(v<-200)v=-200;if(v>200)v=200;
+SET.ho=v;rset();
+txf({a:'settings_set',k:'ho',v:v});
+}
+// ---- Battery ----
+function batt(){
+if(!S||S.bp===undefined)return '';
+var c=S.bk?'#F44336':S.bl?'#D4A547':'#4CAF50';
+var t=S.bk?' — too low to pour':S.bl?' — low':'';
+return '<span style="color:'+c+'">&#9646; '+S.bp+'%'+t+'</span>';
+}
+// ---- OTA ----
+function showOtaCard(){
+var oc=$('oc');
+if(!oc)return;
+// Hidden mid-flight and mid-test for the same reason the other cards
+// are: an update is refused in those states anyway.
+if(!S||S.a||S.dg){oc.style.display='none';return;}
+if(h2hSetup||gpMode||dgAsk){oc.style.display='none';return;}
+oc.style.display='';
+rota();
+}
+function rota(){
+var oc=$('oc');
+if(!oc)return;
+var h='<div class="fhdr" onclick="oOpen=!oOpen;rota()"><div class="st" style="margin:0">Firmware</div><span>'+(oOpen?'&#9650;':'&#9660;')+'</span></div>';
+if(oOpen){
+var cur=(SET&&SET.fw)?SET.fw:(OTA&&OTA.fw)?OTA.fw:'?';
+h+='<div class="hint">Installed: v'+esc(cur)+'</div>';
+var ph=OTA?OTA.ph:'';
+if(ph==='checking'){
+h+='<div class="msg">Checking for updates...</div>';
+}else if(ph==='installing'){
+h+='<div class="msg" style="color:#D4A547">Installing — do not power off</div>';
+h+='<div class="hint">This takes about a minute. The device will reboot and this page will reconnect on its own.</div>';
+}else if(ph==='done'){
+h+='<div class="msg" style="color:#4CAF50">Installed — rebooting</div>';
+h+='<div class="hint">Leave the device powered for at least 30 seconds. Switching off inside that window rolls the update back.</div>';
+}else if(ph==='avail'){
+h+='<div class="msg" style="color:#4CAF50">v'+esc(OTA.v||'?')+' available</div>';
+if(OTA.notes)h+='<div class="hint">'+esc(OTA.notes)+'</div>';
+if(OTA.sz)h+='<div class="hint">'+Math.round(OTA.sz/1024)+' KB</div>';
+h+='<button class="btn bp" onclick="tx({a:\'ota_start\'})">Install Update</button>';
+h+='<div class="hint" style="margin-top:8px">Keep the device powered until it has been running for 30 seconds after the reboot.</div>';
+h+='<button class="btn bs" onclick="tx({a:\'ota_check\'})">Check Again</button>';
+}else if(ph==='none'){
+h+='<div class="msg">Up to date</div>';
+h+='<button class="btn bs" onclick="tx({a:\'ota_check\'})">Check Again</button>';
+}else if(ph==='err'){
+h+='<div class="ferr">'+esc(OTA.e||'Update failed')+'</div>';
+h+='<button class="btn bs" onclick="tx({a:\'ota_check\'})">Try Again</button>';
+}else{
+h+='<button class="btn bs" onclick="tx({a:\'ota_check\'})">Check for Updates</button>';
+}
+}
+oc.innerHTML=h;
 }
 function rh(){
 var v=$('v');

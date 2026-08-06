@@ -15,11 +15,11 @@
 #include "device_id.h"
 #include "telemetry.h"
 #include "selftest.h"
+#include "ui.h"
 
 #ifndef HEADLESS_BUILD
 #include <TFT_eSPI.h>
 #include "transitions.h"
-#include "ui.h"
 #include "screens.h"
 #include "splash.h"
 
@@ -76,6 +76,8 @@ void setup() {
     motorSetPourSide(settingsGetPourSide());
     motorSetHomeOffset(settingsGetHomeOffset());
 
+    uiInit(nullptr);   // resets the (display-less) screen stack + idle timer
+
     wifiPortalInit();
 
     Serial.println("[Main] Headless mode — Wi-Fi portal active");
@@ -91,9 +93,10 @@ void loop() {
     audioUpdate();
     inputUpdate();
 
-#ifndef HEADLESS_BUILD
+    // Both builds. On headless this has nothing to draw, but it is still
+    // the loop that drains phone-injected input into the active screen and
+    // runs game.cpp's deferred-action pump — see headless_stubs.cpp.
     uiUpdate();
-#endif
 
     wifiPortalUpdate();
 

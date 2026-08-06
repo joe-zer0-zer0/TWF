@@ -1097,11 +1097,21 @@ static void drawCountSelect(bool fullRedraw) {
 // ============================================================
 
 static void runPourCycle() {
-#ifndef HEADLESS_BUILD
     if (batteryIsLockout()) {
-        gameShowLockoutScreen();
+        Serial.println("[Game] Battery lockout — refusing pour");
+#ifndef HEADLESS_BUILD
+        gameShowLockoutScreen();    // draws, then blocks on a button press
+#else
+        // No modal to draw and no button to dismiss it — but the guard
+        // itself must not be skipped, which is what the old
+        // #ifndef-around-everything did. Without it a headless unit keeps
+        // driving the stepper on a flat pack, and a sagging pack under a
+        // loaded disc is exactly what stalls the carousel. The phone finds
+        // out why from the "bk" flag in the state broadcast below.
+        audioPlayTone(TONE_ERROR);
+#endif
+        motorDisable();
         if (session.pourCount > 0) {
-            motorDisable();
             flushInput();
             state = GAME_TASTING;
             persistSaveGame(currentMode, state, session);
@@ -1110,9 +1120,9 @@ static void runPourCycle() {
             gameActive = false;
             uiPopScreenT(TRANS_FADE);
         }
+        wifiPortalBroadcastNow();
         return;
     }
-#endif
 
     uiResetIdleTimer();
 
@@ -1508,6 +1518,7 @@ static void gameInput(InputEvent evt) {
                     Serial.println("[Game] Cancel — no pours, aborting");
                     persistClearSession();
                     gameActive = false;
+                    uiPopScreenT(TRANS_FADE);
                 }
             }
             break;
@@ -1521,6 +1532,7 @@ static void gameInput(InputEvent evt) {
                 } else {
                     persistClearSession();
                     gameActive = false;
+                    uiPopScreenT(TRANS_FADE);
                 }
             }
             break;
@@ -1858,9 +1870,12 @@ static void gameInput(InputEvent evt) {
             } else if (evt == INPUT_BTN_LEFT) {
                 audioPlayTone(TONE_SELECT);
                 gameActive = false;
-#ifndef HEADLESS_BUILD
+                // Not guarded any more. The pop used to be screen-only
+                // because the headless stack was a no-op; it is real now,
+                // and leaving the game screen pushed after an exit means
+                // the next start pushes a second copy — eight exits and
+                // the stack overflows.
                 uiPopScreenT(TRANS_FADE);
-#endif
             }
             break;
     }
