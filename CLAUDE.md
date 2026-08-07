@@ -60,7 +60,8 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 
 ## Current State
 
-* **Released firmware: v1.5.4.** Master is clean and `release/version.json` matches the published asset.
+* **Released firmware: v1.6.1.** Master is clean and both manifests match their published assets.
+* **The headless build is now actually playable (v1.6.0).** Through v1.5.4 it compiled and booted but no flight could start or advance: `ui.cpp` is excluded by `build_src_filter` and the stub `uiUpdate()` drained nothing, so `gameDraw()` (the deferred phone-action pump) and `gameInput()` (which the phone's Done/Reveal/Back buttons reach via `inputInjectEvent`) never ran. `headless_stubs.cpp` now keeps a real screen stack and dispatches input and draw. **Head-to-Head is still broken headless** — `h2hInput()` and `screenH2H` are inside the screen-only block and there is no phone action to confirm an H2H pour, so a game reaches the first pour and stops. Solo modes are fine.
 * **Mechanical (in progress, Jeremy's bench):** PTFE furniture pads confirmed working in initial testing. Carrier plate (attaches to top of motor) and set-screw placement/materials currently in physical prototyping. Ball transfer units at 120° spacing remain the fallback if needed. Final battery/charging part selection also open.
 * **Alignment baseline — read before planning motor work.** The Session 9 auto-diag capture archived at `docs/baselines/selftest_baseline_2026-07-28_fw1.5.2.log` came back **inside the roadmap's goal thresholds**: interGlassSpread=3, worstScatter=3, accumMax=1, 24 reads / 0 failed. Per-position means were `+1, +1, -2, 0` — **glass 4 was not the worst**, contradicting the impression that drove the alignment roadmap. The run is **unloaded** (the auto-diag requires glasses off — many revolutions at speed), so the residual error users could identify at the event is most likely load-dependent, pointing at the mechanical work above rather than at firmware.
 * **Pour-side selection** — fully implemented. Settings menu item cycles Front/Right/Rear/Left, NVS-persistent, runtime offset applied to all motor glass positioning.
@@ -122,9 +123,10 @@ and test," run the full release procedure below without being asked.
    minor for behavioural changes. This must match the tag exactly — the OTA manifest
    is generated from the tag, and a device already running that version will not
    offer the update.
-2. **Compile both environments** — `esp32` and `esp32-headless`. Never tag a build
-   that has not compiled locally; CI builds only `esp32`, so a headless-only break
-   ships silently.
+2. **Compile both environments** — `esp32` and `esp32-headless`. As of v1.6.1 CI
+   builds both too, so a headless-only break now fails the release rather than
+   shipping silently — but compile locally first anyway, so you find it in seconds
+   instead of after a tag push.
 
    ```bash
    cd Blind-Flight && pio run -e esp32 && pio run -e esp32-headless
@@ -140,14 +142,38 @@ and test," run the full release procedure below without being asked.
    ```
 5. **Watch the workflow to completion** — `gh run watch <id> --exit-status`. A failed
    run means no release exists and the device will not see the update.
-6. **Verify the published manifest** — pull, then confirm `release/version.json`
-   shows the new version and that the `size`/`sha256` match the release asset. The
-   device validates both; a mismatch aborts the update on-device.
+6. **Verify both published manifests** — pull, then confirm `release/version.json`
+   *and* `release/version-headless.json` show the new version and that each one's
+   `size`/`sha256` match its own release asset. The device validates both fields; a
+   mismatch aborts the update on-device. Downloading the asset and hashing it is the
+   only check that actually proves the channel works.
 7. **Then** give Jeremy the testing checklist, noting the version to look for.
 
-`.github/workflows/release.yml` does the rest: builds `esp32`, publishes the GitHub
-Release with `firmware.bin`, regenerates `release/version.json`, and commits it back
-to master. The device reads that file from `OTA_MANIFEST_URL` (`config.h`).
+`.github/workflows/release.yml` does the rest: builds **both** environments,
+publishes the GitHub Release with `firmware.bin` (screen) and
+`firmware-headless.bin`, regenerates `release/version.json` and
+`release/version-headless.json`, and commits both back to master.
+
+**Two OTA channels, one per build variant.** `OTA_MANIFEST_URL` in `config.h` is
+`#ifdef`'d on `HEADLESS_BUILD`, so each build can only ever be offered its own
+binary. This is not cosmetic: installing the screen build on headless hardware
+would not crash, so bootloader rollback would not catch it — the unit would boot
+TFT firmware on a device with no TFT and go unreachable inside a sealed enclosure.
+Never collapse the two manifests back into one without also removing the split
+build.
+
+**If a tag push produces no workflow run at all** (this happened on 2026-08-06 with
+v1.6.0 — tag on the remote, workflow file present on the tagged commit, Actions
+enabled, no GitHub incident, and re-pushing the tag changed nothing), the workflow
+also accepts a manual trigger:
+
+```bash
+gh workflow run release.yml --ref vX.Y.Z
+```
+
+`GITHUB_REF_NAME` is the tag name when dispatched that way, so every step behaves
+exactly as it does on a tag push. Root cause was never identified; later tag pushes
+worked normally.
 
 ### Consequences of losing USB
 
