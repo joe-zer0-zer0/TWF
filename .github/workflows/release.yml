@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual fallback. On 2026-08-06 a v1.6.0 tag push produced no workflow
+  # run at all — tag present on the remote, workflow file present on the
+  # tagged commit, Actions enabled, no incident — so there was no way to
+  # publish a release, and with USB flashing gone that means no way to
+  # reach the hardware. Dispatch this against the tag:
+  #     gh workflow run release.yml --ref vX.Y.Z
+  # GITHUB_REF_NAME is the tag name in that case, so every step below
+  # behaves exactly as it does on a tag push.
+  workflow_dispatch:
 
 permissions:
   contents: write
