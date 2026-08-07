@@ -30,36 +30,66 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build firmware
+      # Both environments. Building only `esp32` meant a headless-only
+      # break shipped silently, and — worse — only the screen binary was
+      # ever published, so a headless unit checking for updates was
+      # pointed at screen firmware. That would not crash, so bootloader
+      # rollback would not catch it: it would just boot TFT firmware on a
+      # device with no TFT and no way back in.
+      - name: Build firmware (screen)
         run: pio run -e esp32
         working-directory: Blind-Flight
 
+      - name: Build firmware (headless)
+        run: pio run -e esp32-headless
+        working-directory: Blind-Flight
+
+      # Two binaries, two manifests, one release. Each build reads its own
+      # manifest URL (see OTA_MANIFEST_URL in Blind-Flight/src/config.h),
+      # so a device can only ever be offered its own variant.
+      #
+      # version.json keeps its exact name, path and shape: devices already
+      # running v1.6.0 are reading it and must not break.
       - name: Prepare release assets
         run: |
-          BIN="Blind-Flight/.pio/build/esp32/firmware.bin"
-          cp "$BIN" release/firmware.bin
-
-          SIZE=$(stat --format=%s release/firmware.bin)
-          SHA=$(sha256sum release/firmware.bin | cut -d' ' -f1)
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
 
-          printf '{\n  "version": "%s",\n  "url": "https://github.com/%s/releases/latest/download/firmware.bin",\n  "notes": "Release %s",\n  "size": %s,\n  "sha256": "%s"\n}\n' \
-            "$VERSION" "${{ github.repository }}" "$VERSION" "$SIZE" "$SHA" \
-            > release/version.json
+          emit_manifest() {
+            # $1 = asset filename, $2 = manifest filename, $3 = label
+            local asset="$1" manifest="$2" label="$3"
+            local size sha
+            size=$(stat --format=%s "release/${asset}")
+            sha=$(sha256sum "release/${asset}" | cut -d' ' -f1)
+            printf '{\n  "version": "%s",\n  "url": "https://github.com/%s/releases/latest/download/%s",\n  "notes": "Release %s%s",\n  "size": %s,\n  "sha256": "%s"\n}\n' \
+              "$VERSION" "${{ github.repository }}" "$asset" \
+              "$VERSION" "$label" "$size" "$sha" \
+              > "release/${manifest}"
+            echo "--- ${manifest} ---"
+            cat "release/${manifest}"
+          }
+
+          cp Blind-Flight/.pio/build/esp32/firmware.bin          release/firmware.bin
+          cp Blind-Flight/.pio/build/esp32-headless/firmware.bin release/firmware-headless.bin
+
+          emit_manifest firmware.bin          version.json          ""
+          emit_manifest firmware-headless.bin version-headless.json " (headless)"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/firmware.bin
+          files: |
+            release/firmware.bin
+            release/firmware-headless.bin
           generate_release_notes: true
 
-      - name: Commit updated version.json
+      - name: Commit updated manifests
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin master
           git checkout master
-          git add release/version.json
+          git add release/version.json release/version-headless.json
           git diff --cached --quiet && exit 0
-          git commit -m "Update version.json for v${GITHUB_REF_NAME#v}"
+          git commit -m "Update version manifests for v${GITHUB_REF_NAME#v}"
           git push origin master

@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.6.0"
+#define FW_VERSION  "1.6.1"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -191,7 +191,26 @@
 #define NVS_NS_WIFI             "bfwifi"
 
 // --- OTA firmware updates ---
+// One manifest per build variant. The two environments produce different
+// binaries (esp32 carries TFT_eSPI, the screen_*.cpp files and the image
+// assets; esp32-headless does not), and there is no way for a running
+// image to tell which one it is at runtime. So the choice is made here at
+// compile time: a headless build can only ever be offered a headless
+// binary, and vice versa.
+//
+// This matters more than it reads. Installing the screen build on
+// headless hardware would not crash, so the bootloader rollback would not
+// catch it — the unit would simply boot TFT firmware on a device with no
+// TFT, gate Wi-Fi behind settingsGetWifiOn(), and become unreachable
+// inside a sealed enclosure with no USB port.
+//
+// release/version.json keeps its name and shape for the screen build:
+// devices already running v1.6.0 are reading it.
+#ifdef HEADLESS_BUILD
+#define OTA_MANIFEST_URL    "https://raw.githubusercontent.com/joe-zer0-zer0/TWF/master/release/version-headless.json"
+#else
 #define OTA_MANIFEST_URL    "https://raw.githubusercontent.com/joe-zer0-zer0/TWF/master/release/version.json"
+#endif
 #define OTA_CHECK_TIMEOUT   10000       // ms for manifest fetch
 // HTTPClient::setTimeout() takes a uint16_t, so the old 120000 here
 // silently wrapped to 54464 ms — the "120 second" download timeout has

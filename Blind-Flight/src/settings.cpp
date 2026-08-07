@@ -31,7 +31,7 @@ static const char* NVS_NS = "bf";
 static bool    sSoundOn   = true;
 static uint8_t sVolume    = 3;      // 0–4
 static uint8_t sBrightness = 4;    // 0–4
-static bool    sWifiOn    = false;
+static bool    sWifiOn    = true;   // phone control is standard, not opt-in
 static uint8_t sSpinSpeed = 1;     // 0=Fast, 1=Normal, 2=Theatrical
 static uint8_t sPourSide  = 0;    // 0=Front, 1=Right, 2=Rear, 3=Left
 static int16_t sHomeOffset = 0;   // microstep trim for pour alignment
@@ -50,7 +50,13 @@ void settingsInit() {
     sSoundOn    = prefs.getBool("sndOn",   true);
     sVolume     = prefs.getUChar("sndVol", 3);
     sBrightness = prefs.getUChar("bright", 4);
-    sWifiOn     = prefs.getBool("wifiOn",  false);
+    // Default flipped to true in v1.6.1. Phone control is the standard
+    // interface on both builds — the headless build has no other one —
+    // so a unit that has never been configured should come up reachable
+    // rather than needing someone to find the setting on the physical
+    // menu first. This only affects devices whose NVS has no "wifiOn"
+    // key: any unit that has saved settings keeps whatever it had.
+    sWifiOn     = prefs.getBool("wifiOn",  true);
     sSpinSpeed  = prefs.getUChar("spinSpd", 1);
     sPourSide   = prefs.getUChar("pourSd",  0);
     sHomeOffset = prefs.getShort("homeOff", 0);
