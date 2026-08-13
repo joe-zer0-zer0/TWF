@@ -116,14 +116,13 @@ void uiUpdate() {
     // backlight/dim tiers above it have no meaning without a display, so
     // only the motor half is kept. Dropping the hold means the disc can
     // be turned by hand, so the tracked position is no longer trustworthy
-    // — invalidate it and let the next pour cycle re-home (item 7k).
+    // — motorDisable() invalidates it and the next pour cycle re-homes
+    // (item 7k).
     unsigned long now = millis();
     if (!motorIdleOff) {
         unsigned long offMs = (unsigned long)settingsGetOffDelay() * 1000UL;
         if (now - lastActivityMs >= offMs) {
             motorDisable();
-            gameInvalidateHoming();
-            h2hInvalidateHoming();
             motorIdleOff = true;
             Serial.println("[UI] Idle — motor released, position unverified");
         }

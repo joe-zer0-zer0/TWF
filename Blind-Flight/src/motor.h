@@ -101,6 +101,31 @@ int motorGetPourOffset();
 // Has the motor been successfully homed since power-on?
 bool motorIsHomed();
 
+// --- Disc position trust ---
+//
+// motorIsHomed() answers "has this device ever homed since power-on", which
+// is what the About screen wants. It is the wrong question for a flight in
+// progress: the disc becomes hand-turnable the instant the driver stops
+// holding it, and from then on the tracked position is fiction even though
+// homing did once succeed.
+//
+// motorPositionIsVerified() answers the useful question — "is
+// motorGetPosition() still believable". It is set by a successful
+// motorHome() / motorMeasureHomeCW() and cleared by motorDisable(), because
+// releasing the driver IS the moment the disc becomes free.
+//
+// Any mode that positions glasses gates its pour on this instead of carrying
+// a private "have I homed yet this flight" bool. That older pattern made
+// "who owns the disc" a hand-maintained list of modules, and a mode left off
+// the list failed silently — with glasses loaded, silently means a spill.
+bool motorPositionIsVerified();
+
+// Declare the tracked position untrustworthy without releasing the driver.
+// Two uses: forcing the once-per-flight home at the start of a new flight,
+// and the case where the disc did not move but the frame of reference did
+// (a home-offset trim change mid-session).
+void motorInvalidatePosition();
+
 // Returns a randomized extra-revolution count based on the current
 // spin speed preset (set via motorSetSpinSpeed). Use this instead of
 // hardcoding extra revs so presets actually take effect.

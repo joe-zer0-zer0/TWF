@@ -52,7 +52,6 @@ static int revealIndex = 0;
 
 // --- Browse integration ---
 static bool awaitingBrowseReturn = false;
-static bool homedThisFlight = false;
 
 // --- Sub-mode selector ---
 static ScrollList subModeList;
@@ -95,7 +94,8 @@ static void resetSession() {
     currentGlass = 0;
     revealMapCount = 0;
     revealIndex = 0;
-    homedThisFlight = false;
+    // Force the once-per-flight home — see game.cpp's resetSession().
+    motorInvalidatePosition();
     for (int i = 0; i < H2H_MAX_PLAYERS; i++) {
         players[i].name[0] = '\0';
         players[i].connected = false;
@@ -317,9 +317,8 @@ static void runH2HPourCycle() {
 
     uiResetIdleTimer();
 
-    if (!homedThisFlight) {
+    if (!motorPositionIsVerified()) {
         runHomingSequence();
-        homedThisFlight = true;
     }
 
     if (subMode == H2H_SUB_2X2 || subMode == H2H_SUB_PREMIUM) {
@@ -1143,12 +1142,6 @@ const Screen screenH2H = {
 
 bool h2hIsActive() {
     return h2hActive;
-}
-
-void h2hInvalidateHoming() {
-    if (!h2hActive || !homedThisFlight) return;
-    homedThisFlight = false;
-    Serial.println("[H2H] Position no longer verified — will re-home before next pour");
 }
 
 H2HPhase h2hGetPhase() {

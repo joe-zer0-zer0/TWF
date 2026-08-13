@@ -65,7 +65,6 @@ static bool phonePendingStart = false;
 static GameMode phoneStartMode = GAME_MODE_BASIC;
 static int phoneStartGC = 0;
 static bool pendingResumePour = false;
-static bool homedThisFlight  = false;
 
 // ============================================================
 // Helpers
@@ -119,7 +118,10 @@ static void resetSession() {
     revealMapCount       = 0;
     session.rankIndex    = 0;
     session.ratingIndex  = 0;
-    homedThisFlight      = false;
+    // Force the once-per-flight home. Glasses get loaded and the disc gets
+    // nudged between flights, so a new flight never inherits the previous
+    // one's position even if the driver never let go.
+    motorInvalidatePosition();
     for (int i = 0; i < NUM_GLASSES; i++) {
         session.pourOrder[i] = 0;
         session.glassUsed[i] = false;
@@ -1126,9 +1128,8 @@ static void runPourCycle() {
 
     uiResetIdleTimer();
 
-    if (!homedThisFlight) {
+    if (!motorPositionIsVerified()) {
         runHomingSequence();
-        homedThisFlight = true;
     }
 
     if (modeIsChallenge()) {
@@ -1933,12 +1934,6 @@ bool gameIsActive() {
     return gameActive;
 }
 
-void gameInvalidateHoming() {
-    if (!gameActive || !homedThisFlight) return;
-    homedThisFlight = false;
-    Serial.println("[Game] Position no longer verified — will re-home before next pour");
-}
-
 void gameAbort() {
     if (!gameActive) return;
     Serial.println("[Game] Aborted via long-press cancel");
@@ -2291,6 +2286,13 @@ void gameResumeSession(GameMode mode, GameState resumeState,
 
     session = saved;
     session.glassCount = glassCount;
+
+    // This path does not go through resetSession(), so it has to force the
+    // home itself. A resumed flight means the device was off mid-flight with
+    // glasses loaded; nothing that happened to the disc in that window is
+    // recorded anywhere. Matches the pre-refactor behaviour, where the
+    // per-flight flag was simply false at boot.
+    motorInvalidatePosition();
 
     if (resumeState == GAME_TASTING || resumeState == GAME_RATING ||
         resumeState == GAME_GUESSING || resumeState == GAME_RANKING) {

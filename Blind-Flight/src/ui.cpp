@@ -223,15 +223,14 @@ void uiUpdate() {
         uint16_t offDelay = settingsGetOffDelay();
         if (idleMs >= (unsigned long)offDelay * 1000UL) {
             setBacklight(0);
+            // Item 7k. The disc is now free to be turned by hand, so any
+            // flight mid-sequence must re-home before its next pour. That
+            // used to be a hand-written list of every disc-owning module
+            // here; motorDisable() clears the position-trust flag itself
+            // now, so a new mode cannot be forgotten. Costs one extra
+            // homing per idle event and holds no current, which is exactly
+            // the stated recovery model.
             motorDisable();
-            // Item 7k. The disc is now free to be turned by hand. If a
-            // flight is mid-sequence its tracked position is no longer
-            // trustworthy, and nothing else re-establishes one — so mark
-            // it unverified and let the next pour cycle re-home. Costs
-            // one extra homing per idle event and holds no current,
-            // which is exactly the stated recovery model.
-            gameInvalidateHoming();
-            h2hInvalidateHoming();
             idleState = IDLE_OFF;
         }
     }
@@ -249,11 +248,15 @@ void uiUpdate() {
             if (wasOff) {
                 // A flight already in progress may have glasses loaded on the
                 // disc — don't spin the carousel on a bare wake-up press.
-                // The re-home still happens, just later: idle-off cleared
-                // homedThisFlight above, so the next runPourCycle() homes
-                // before it moves anything. (That was not true before item
-                // 7k; the flag stayed set from pour 1 onward and the rest of
-                // the flight ran on an unverified position.)
+                // The re-home still happens, just later: motorDisable()
+                // above cleared position trust, so the next runPourCycle()
+                // homes before it moves anything. (That was not true before
+                // item 7k; the flag stayed set from pour 1 onward and the
+                // rest of the flight ran on an unverified position.)
+                //
+                // NOTE: this guard is still a by-name list of disc owners.
+                // Every new mode must be added here or a wake press spins a
+                // loaded carousel. Flight Club adds !partyIsActive().
                 if (!gameIsActive() && !h2hIsActive()) {
                     runHomingSequence();
                 }

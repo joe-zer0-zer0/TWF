@@ -13,6 +13,7 @@ Audited 2026-08-02 against the source tree at v1.5.4.
 | `alignment_recovery_roadmap.md` | **In progress.** Sessions 1, 2, 5, 7, 9 released. Baseline archived (`docs/baselines/`). Session 3 is next and unblocked — but see the timing note in `CLAUDE.md`, its acceptance test is scored against a baseline captured on the current shaft coupling. |
 | `share_card_spec.md` | **Not started.** Phases 1–3 scoped, Phase 4 (cloud link) deferred. Phone UI + `wifi_portal.cpp` only. |
 | `phone_only_architecture.md` | **Partially done.** The two-environment build split (`esp32` / `esp32-headless`) is live and both must compile before any tag. The headless WS2812B status LED is the remaining piece — no driver exists in `src/` yet. |
+| `flight_club_spec.md` | **In progress.** Flight Club — multi-participant sequential flights with held-back cumulative reveal, fully operable from the encoder with no phone. The prerequisite disc-ownership refactor shipped separately in **v1.6.2** (`motorDisable()` clears position trust; `motorPositionIsVerified()` replaces the per-module `homedThisFlight` bools). Phase 1 (engine + host-proxy rank entry + roster) is next and needs no networking work. Phase 3 requires role separation in `wifi_portal.cpp` and a client-cap raise. |
 
 ## Completed
 

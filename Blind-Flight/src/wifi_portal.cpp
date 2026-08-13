@@ -1863,8 +1863,8 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
         else if (key == "ho") {
             settingsSetHomeOffset((int16_t)val);
             motorSetHomeOffset(settingsGetHomeOffset());
-            gameInvalidateHoming();
-            h2hInvalidateHoming();
+            // The disc did not move, but the frame of reference did.
+            motorInvalidatePosition();
         }
         else return;
 

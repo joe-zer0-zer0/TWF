@@ -29,6 +29,12 @@
 static int currentMotorPos = 0;
 static bool homed = false;
 
+// Is currentMotorPos still trustworthy? Distinct from `homed`, which is
+// "has ever homed since power-on" and never goes back to false. This one
+// is cleared by motorDisable() — see motor.h for why that is the right
+// place for it.
+static bool positionVerified = false;
+
 // Runtime spin speed parameters (Session 17)
 // Defaults match MOTOR_MAX_SPEED / Normal preset
 static int runtimeMaxSpeed   = MOTOR_MAX_SPEED;  // microsteps/sec
@@ -306,6 +312,11 @@ static bool hallStable(int level) {
 bool motorHome(int attempt) {
     motorEnable();
 
+    // Homing scans the disc around, so currentMotorPos is stale for the
+    // whole of this call and stays stale if any phase below bails out.
+    // Clear first, set only on the success path.
+    positionVerified = false;
+
     // --- Phase 1: If sitting on magnet, move off ---
     if (digitalRead(PIN_HALL) == LOW) {
         digitalWrite(PIN_MOTOR_DIR, MOTOR_CW_DIR);
@@ -410,6 +421,7 @@ bool motorHome(int attempt) {
 
     currentMotorPos = 0;
     homed = true;
+    positionVerified = true;
     lastMagnetWidth = magnetWidth;
 
     Serial.printf("[Motor] Homed: magnet width=%d steps (%.1f°), centered (backed %d)\n",
@@ -536,6 +548,11 @@ void motorEnable() {
 void motorDisable() {
     digitalWrite(PIN_MOTOR_EN, HIGH);
     driverEnabled = false;
+    // The disc is now free to be turned by hand, so whatever we think the
+    // position is stops being evidence. Every caller that wants to move
+    // afterwards already homes first; the ones that do not are the bug this
+    // flag exists to catch.
+    positionVerified = false;
 }
 
 // ============================================================
@@ -592,6 +609,16 @@ bool motorIsHomed() {
     return homed;
 }
 
+bool motorPositionIsVerified() {
+    return positionVerified;
+}
+
+void motorInvalidatePosition() {
+    if (!positionVerified) return;
+    positionVerified = false;
+    Serial.println("[Motor] Position no longer verified — next move must home");
+}
+
 int motorGetExtraRevs() {
     if (runtimeExtraMax <= runtimeExtraMin) return runtimeExtraMin;
     return runtimeExtraMin + random(runtimeExtraMax - runtimeExtraMin + 1);
@@ -628,6 +655,7 @@ int motorGetLastMagnetWidth() {
 
 bool motorMeasureHomeCW(int* stepsToCentre, int* magnetWidth) {
     motorEnable();
+    positionVerified = false;   // same reasoning as motorHome()
     digitalWrite(PIN_MOTOR_DIR, MOTOR_CW_DIR);
     delayMicroseconds(10);
 
@@ -698,6 +726,7 @@ bool motorMeasureHomeCW(int* stepsToCentre, int* magnetWidth) {
     currentMotorPos = ((taken - centre) % MICROSTEPS_PER_REV
                        + MICROSTEPS_PER_REV) % MICROSTEPS_PER_REV;
     homed = true;
+    positionVerified = true;
     lastMagnetWidth = width;
 
     if (stepsToCentre) *stepsToCentre = centre;
