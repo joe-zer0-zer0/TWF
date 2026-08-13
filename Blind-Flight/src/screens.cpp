@@ -5,6 +5,7 @@
 #include "input.h"
 #include "game.h"
 #include "h2h.h"
+#include "party.h"
 #include "palate_training.h"
 #include "settings.h"
 #include "battery.h"
@@ -17,13 +18,14 @@
 
 // Menu screen — now uses ScrollList
 static ScrollList menuList;
-static const int MENU_COUNT = 5;
+static const int MENU_COUNT = 6;
 static const char* menuLabels[MENU_COUNT] = {
     "Quick Flight",
     "Full Flight",
     "Ranked Flight",
     "Palate Training",
-    "Head to Head"
+    "Head to Head",
+    "Flight Club"
 };
 
 // Detail screen — set by menu before pushing
@@ -153,8 +155,8 @@ const Screen screenHome = {
 
 static void menuDrawSubmenuIndicators() {
     TFT_eSPI* tft = uiGetTFT();
-    // Draw right-pointing triangle on submenu items (indices 3, 4)
-    for (int idx = 3; idx <= 4; idx++) {
+    // Draw right-pointing triangle on submenu items (indices 3-5)
+    for (int idx = 3; idx <= 5; idx++) {
         int slot = idx - menuList.scrollOffset;
         if (slot < 0 || slot >= menuList.visibleCount) continue;
         int itemY = CONTENT_Y + 4 + slot * MENU_ITEM_H;
@@ -205,6 +207,8 @@ static void menuInput(InputEvent evt) {
             uiPushScreen(&screenPalateTraining);
         } else if (sel == 4) {
             uiPushScreen(&screenH2H);
+        } else if (sel == 5) {
+            uiPushScreen(&screenParty);
         }
         return;
     }

@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.6.2"
+#define FW_VERSION  "1.7.0"
 
 // --- Pin definitions (from hardware spec) ---
 

@@ -11,6 +11,7 @@
 #include "diagnostics.h"
 #include "persist.h"
 #include "favorites.h"
+#include "roster.h"
 #include "ota.h"
 #include "device_id.h"
 #include "telemetry.h"
@@ -40,6 +41,7 @@ void setup() {
 
     settingsInit();
     favoritesInit();
+    rosterInit();
     batteryInit();
     telemetryInit();   // after batteryInit — every record carries battery mV
     persistInit();

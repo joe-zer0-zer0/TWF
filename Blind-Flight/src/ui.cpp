@@ -3,6 +3,7 @@
 #include "audio.h"
 #include "game.h"
 #include "h2h.h"
+#include "party.h"
 #include "motor.h"
 #include "screens.h"
 #include "settings.h"
@@ -256,8 +257,10 @@ void uiUpdate() {
                 //
                 // NOTE: this guard is still a by-name list of disc owners.
                 // Every new mode must be added here or a wake press spins a
-                // loaded carousel. Flight Club adds !partyIsActive().
-                if (!gameIsActive() && !h2hIsActive()) {
+                // loaded carousel. Flight Club is the mode most likely to
+                // sit at idle-off with a full set of glasses on the disc,
+                // waiting for the host to come back to it.
+                if (!gameIsActive() && !h2hIsActive() && !partyIsActive()) {
                     runHomingSequence();
                 }
                 needsRedraw = true;
