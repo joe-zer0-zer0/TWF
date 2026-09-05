@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "screen_attract.h"
 #include "config.h"
 #include "audio.h"
 #include "motor.h"
@@ -43,6 +44,7 @@ enum DiagItem {
     DG_STATS,
     DG_LOG,
     DG_SPIN,
+    DG_ATTRACT,
     DG_ITEM_COUNT
 };
 
@@ -54,7 +56,8 @@ static const char* diagItemLabels[DG_ITEM_COUNT] = {
     "HW Diag",
     "Usage Stats",
     "Flight Log",
-    "Spin Test"
+    "Spin Test",
+    "Attract"
 };
 
 // --- View ---
@@ -426,6 +429,10 @@ static void runPendingAction() {
 
         case DG_HWDIAG:
             uiPushScreenT(&screenHwDiag, TRANS_WIPE_LEFT);
+            break;
+
+        case DG_ATTRACT:
+            uiPushScreenT(&screenAttract, TRANS_FADE);
             break;
 
         default:

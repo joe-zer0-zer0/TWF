@@ -15,6 +15,7 @@
 #include "selftest.h"
 #ifndef HEADLESS_BUILD
 #include "screens.h"
+#include "screen_attract.h"
 #endif
 
 #include <WiFi.h>
@@ -1664,6 +1665,14 @@ static void handleWSAction(uint8_t clientNum, uint8_t* payload, size_t length) {
                       action.c_str());
         return;
     }
+
+#ifndef HEADLESS_BUILD
+    if (attractIsRunning()) {
+        Serial.printf("[WiFi] Phone action '%s' ignored: attract mode\n",
+                      action.c_str());
+        return;
+    }
+#endif
 
     // --- OTA ---
     // Below the self-test guard on purpose: an OTA blocks for the length
