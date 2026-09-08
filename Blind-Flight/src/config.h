@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.8.0"
+#define FW_VERSION  "1.9.0"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -24,10 +24,28 @@
 #define PIN_BTN_LEFT    14
 #define PIN_BTN_RIGHT   12
 
-// Stepper motor (TMC2209 standalone mode)
+// Stepper motor (TMC2209 via UART)
 #define PIN_MOTOR_STEP  25
 #define PIN_MOTOR_DIR   26
 #define PIN_MOTOR_EN    27
+#define PIN_TMC_TX      21      // ESP32 TX → BTT TMC2209 v1.3 TX pad
+#define PIN_TMC_RX      22      // ESP32 RX → BTT TMC2209 v1.3 RX pad
+
+// --- TMC2209 driver configuration ---
+// BTT TMC2209 v1.3 sense resistor (0.11Ω typical for BigTreeTech boards).
+// If measured differently on your board, update this value — it scales
+// all current settings.
+#define TMC_R_SENSE         0.11f
+// UART address: set by MS1/MS2. Both unconnected = internal pull-down = 0.
+#define TMC_DRIVER_ADDRESS  0b00
+// Motor RMS current in milliamps. Set to the motor's rated current.
+// Small motor (current): 1000 mA, 0.13 N·m, 3.5Ω, 5.2mH
+// Large motor (17HE15-1504S): 1500 mA, 0.42 N·m, 2.3Ω, 4.0mH
+#define TMC_RUN_CURRENT_MA  1000
+// Hold current as fraction of run current (0–31 scale, 16 ≈ 50%)
+#define TMC_HOLD_CURRENT    16
+// Delay before hold current kicks in after last step (0–15, each unit ≈ 2^18 clocks)
+#define TMC_IHOLDDELAY      6
 
 // Hall effect sensor
 #define PIN_HALL        35   // Input-only GPIO, external 10k pull-up to 3.3V
@@ -46,7 +64,7 @@
 #define BUZZER_RESOLUTION   8    // 8-bit duty resolution
 
 // --- Motor constants ---
-#define MICROSTEPS_PER_REV      1600    // 200 full steps × 8 microsteps (TMC2209 default)
+#define MICROSTEPS_PER_REV      1600    // 200 full steps × 8 microsteps (set via UART)
 #define MICROSTEPS_PER_GLASS    (MICROSTEPS_PER_REV / 4)   // 400
 #define NUM_GLASSES             4
 

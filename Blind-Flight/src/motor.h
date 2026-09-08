@@ -181,6 +181,11 @@ int motorGetLastMagnetWidth();
 // stepsToCentre / magnetWidth may be null.
 bool motorMeasureHomeCW(int* stepsToCentre, int* magnetWidth);
 
+// --- TMC2209 UART status ---
+
+// True if UART communication with the TMC2209 was established at boot.
+bool motorTmcUartOk();
+
 // Consecutive same-state Hall samples required to accept an edge.
 #define MEASURE_EDGE_DEBOUNCE   3
 

@@ -1,6 +1,7 @@
 #include "motor.h"
 #include "config.h"
 #include "telemetry.h"
+#include <TMCStepper.h>
 
 // ============================================================
 // Blind Flight — Motor Module (Session 18)
@@ -59,6 +60,11 @@ static int lastMagnetWidth = 0;   // magnet width from last homing
 // Tracking the state means the 5 ms settle is paid exactly once per
 // disabled -> enabled transition, not on every move.
 static bool driverEnabled = false;
+
+// TMC2209 UART driver instance.
+// HardwareSerial2 is remapped to PIN_TMC_RX/PIN_TMC_TX in motorInit().
+TMC2209Stepper tmcDriver(&Serial2, TMC_R_SENSE, TMC_DRIVER_ADDRESS);
+static bool tmcUartOk = false;
 
 // ============================================================
 // Low-level step pulse
@@ -281,6 +287,51 @@ void motorInit() {
 
     // Hall sensor
     pinMode(PIN_HALL, INPUT);
+
+    // --- TMC2209 UART configuration ---
+    // Serial2 on ESP32 can be remapped to any GPIOs.
+    Serial2.begin(115200, SERIAL_8N1, PIN_TMC_RX, PIN_TMC_TX);
+
+    tmcDriver.begin();
+
+    // Test UART communication by reading a register. The version register
+    // returns 0x21 for TMC2209. A 0 or 0xFF means no communication.
+    uint8_t version = tmcDriver.version();
+    if (version == 0x21) {
+        tmcUartOk = true;
+        Serial.println("[TMC] UART connected (TMC2209 detected)");
+    } else {
+        tmcUartOk = false;
+        Serial.printf("[TMC] UART FAILED — version register returned 0x%02X "
+                      "(expected 0x21). Check TX/RX wiring.\n", version);
+        return;
+    }
+
+    // Enable the driver's internal step/dir interface
+    tmcDriver.toff(4);
+
+    // Current: set digitally, overrides the Vref pot
+    tmcDriver.rms_current(TMC_RUN_CURRENT_MA);
+    tmcDriver.ihold(TMC_HOLD_CURRENT);
+    tmcDriver.iholddelay(TMC_IHOLDDELAY);
+
+    // SpreadCycle for maximum torque (StealthChop is quieter but weaker)
+    tmcDriver.en_spreadCycle(true);
+
+    // Microstepping: 8× (matches MICROSTEPS_PER_REV = 1600).
+    // Interpolation to 256 is on by default and stays on — it smooths
+    // the motion without changing the step count.
+    tmcDriver.microsteps(8);
+
+    // Read back actual values for confirmation
+    uint16_t actualCurrent = tmcDriver.cs2rms(tmcDriver.irun());
+    Serial.printf("[TMC] Config: %d mA RMS, SpreadCycle=%d, microsteps=%d, "
+                  "IRUN=%d, IHOLD=%d\n",
+                  actualCurrent,
+                  tmcDriver.en_spreadCycle() ? 1 : 0,
+                  tmcDriver.microsteps(),
+                  tmcDriver.irun(),
+                  tmcDriver.ihold());
 }
 
 // ============================================================
@@ -642,6 +693,10 @@ bool motorGetLastDriftValid() {
 
 int motorGetLastMagnetWidth() {
     return lastMagnetWidth;
+}
+
+bool motorTmcUartOk() {
+    return tmcUartOk;
 }
 
 // ============================================================
