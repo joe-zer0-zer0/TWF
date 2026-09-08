@@ -13,8 +13,8 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 ### Stack
 
 * **MCU:** ESP32 DevKit V1 (Wi-Fi AP for phone interface)
-* **Motor:** NEMA 17 stepper (1.8°/step, \~40 N·cm), **direct drive** — no gear reduction or belt drive allowed (design constraint)
-* **Driver:** TMC2209 in standalone STEP/DIR mode (no UART)
+* **Motor:** NEMA 17 stepper, 1.8°/step, **direct drive** — no gear reduction or belt drive allowed (design constraint). Current unit: 0.13 N·m / 1.0A / 3.5Ω / 5.2mH. Upgrade motor on hand: 17HE15-1504S (0.42 N·m / 1.5A / 2.3Ω / 4.0mH) — requires housing modification, planned for next prototype.
+* **Driver:** BigTreeTech TMC2209 v1.3, UART on GPIO 21/22 (v1.9.0+). Falls back to standalone STEP/DIR if UART not wired.
 * **Display:** ST7789 IPS TFT, 240×280, SPI (TFT\_eSPI)
 * **Input:** KY-040 rotary encoder + two soft buttons (context-labeled by display)
 * **Homing:** Hall effect sensor + neodymium magnet embedded in disc
@@ -28,6 +28,7 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 |-|-|-|
 |Display MOSI / SCLK / CS / DC / RST / BLK|23 / 18 / 5 / 16 / 17 / 4|BLK is PWM-dimmable|
 |Motor STEP / DIR / EN|25 / 26 / 27|EN active LOW|
+|TMC2209 UART TX / RX|21 / 22|BTT v1.3 TX/RX pads; CLK pad → GND|
 |Encoder CLK / DT / SW|32 / 33 / 34|SW is input-only, external 10kΩ pull-up|
 |Left / Right button|14 / 12|Internal pull-ups, active LOW|
 |Hall sensor|35|Input-only, external 10kΩ pull-up|
@@ -36,7 +37,7 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 
 ### Key Geometry \& Motion Constants
 
-* **1600 microsteps/rev** — TMC2209 with MS1/MS2 unconnected = **8× microstepping** (not 16×). 256-step interpolation keeps motion smooth.
+* **1600 microsteps/rev** — TMC2209 at **8× microstepping** (set via UART register; was MS1/MS2 default before v1.9.0). 256-step interpolation keeps motion smooth.
 * **400 microsteps/glass** (90° between the four positions)
 * **`POUR\_OFFSET` = 1000 microsteps** (135° CCW from Hall trigger to pour position)
 * `MOTOR\_CW\_DIR` / `MOTOR\_CCW\_DIR` defined in `config.h`
@@ -49,7 +50,7 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 ## Firmware
 
 * **Environment:** PlatformIO + VS Code, Arduino framework, C++
-* **Libraries:** TFT\_eSPI (ST7789), links2004/WebSockets
+* **Libraries:** TFT\_eSPI (ST7789), links2004/WebSockets, TMCStepper (TMC2209 UART)
 * **Architecture:** Modular multi-file. Key modules: `motor`, `audio`, `input`, `ui`, `game`, `settings`, `wifi\_portal`, `browse`/`categories`, `transitions`, `splash`, plus per-screen files (`screen\_settings.cpp`, `screen\_motor\_test.cpp`, etc.)
 * **Phone interface:** WebSocket server on port 81; UI embedded in PROGMEM. Wi-Fi AP with captive portal; mDNS fallback at `http://flight.local`
 * **Asset pipeline:** `convert\_assets.py` converts PNG artwork → RGB565 C header arrays and extracts Bézier waypoints from SVG path data. Logo/sprites designed in Inkscape.
@@ -60,7 +61,7 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 
 ## Current State
 
-* **Released firmware: v1.6.1.** Master is clean and both manifests match their published assets.
+* **Released firmware: v1.9.0.** Master is clean and both manifests match their published assets. v1.9.0 adds TMC2209 UART control (SpreadCycle + digital current setting); gracefully falls back to standalone mode if UART not wired.
 * **The headless build is now actually playable (v1.6.0).** Through v1.5.4 it compiled and booted but no flight could start or advance: `ui.cpp` is excluded by `build_src_filter` and the stub `uiUpdate()` drained nothing, so `gameDraw()` (the deferred phone-action pump) and `gameInput()` (which the phone's Done/Reveal/Back buttons reach via `inputInjectEvent`) never ran. `headless_stubs.cpp` now keeps a real screen stack and dispatches input and draw. **Head-to-Head is still broken headless** — `h2hInput()` and `screenH2H` are inside the screen-only block and there is no phone action to confirm an H2H pour, so a game reaches the first pour and stops. Solo modes are fine.
 * **Mechanical (in progress, Jeremy's bench):** PTFE furniture pads confirmed working in initial testing. Carrier plate (attaches to top of motor) and set-screw placement/materials currently in physical prototyping. Ball transfer units at 120° spacing remain the fallback if needed. Final battery/charging part selection also open.
 * **Alignment baseline — read before planning motor work.** The Session 9 auto-diag capture archived at `docs/baselines/selftest_baseline_2026-07-28_fw1.5.2.log` came back **inside the roadmap's goal thresholds**: interGlassSpread=3, worstScatter=3, accumMax=1, 24 reads / 0 failed. Per-position means were `+1, +1, -2, 0` — **glass 4 was not the worst**, contradicting the impression that drove the alignment roadmap. The run is **unloaded** (the auto-diag requires glasses off — many revolutions at speed), so the residual error users could identify at the event is most likely load-dependent, pointing at the mechanical work above rather than at firmware.
