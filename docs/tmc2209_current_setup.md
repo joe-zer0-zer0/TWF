@@ -3,7 +3,62 @@
 **Bench reference for Blind Flight.** Print or keep open on a second screen
 while working on the device.
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-09-07
+
+---
+
+## UART mode (v1.9.0+ — recommended)
+
+As of firmware v1.9.0, the TMC2209 is configured **digitally via UART**.
+When the three UART wires are connected, the firmware sets current,
+microstepping, and chopper mode at boot — the Vref potentiometer is
+ignored and no manual adjustment is needed.
+
+### Wiring (3 wires)
+
+| ESP32 GPIO | TMC2209 board pad | Notes |
+|---|---|---|
+| GPIO 21 | TX | Board's 1kΩ series resistor handles level translation |
+| GPIO 22 | RX | Direct connection to PDN_UART |
+| — | CLK → GND | Tells the TMC2209 to use its internal clock |
+
+### What the firmware configures
+
+| Parameter | Value | Why |
+|---|---|---|
+| RMS current | `TMC_RUN_CURRENT_MA` (config.h, default 1000 mA) | Matched to motor rating |
+| Hold current | IHOLD=16 (~50% of run) | Keeps disc locked between moves |
+| Chopper mode | **SpreadCycle** | Max torque under load (louder than StealthChop) |
+| Microstepping | 8× (1600 steps/rev) | Matches all firmware motion constants |
+| Interpolation | 256× (on by default) | Smooths motion without changing step count |
+
+### Motor current reference
+
+| Motor | Rated current | Set `TMC_RUN_CURRENT_MA` to |
+|---|---|---|
+| Small (current unit): 0.13 N·m, 3.5Ω, 5.2mH | 1.0 A | 1000 |
+| Large (17HE15-1504S): 0.42 N·m, 2.3Ω, 4.0mH | 1.5 A | 1500 |
+
+### Verifying UART communication
+
+At boot, the Serial monitor prints one of:
+- `[TMC] UART connected (TMC2209 detected)` — working, followed by config readback
+- `[TMC] UART FAILED — version register returned 0x00` — wiring issue; driver falls back to standalone mode
+
+### Sense resistor
+
+The BigTreeTech TMC2209 v1.3 uses **0.11Ω** sense resistors. This is set
+in config.h as `TMC_R_SENSE`. If you swap to a different manufacturer's
+board, verify and update this value — it scales all current calculations.
+
+---
+
+## Standalone mode (fallback / legacy)
+
+If UART is **not wired**, the driver operates in standalone mode and the
+sections below apply. The firmware detects the missing UART at boot and
+continues normally — all motor behavior works, but current is controlled
+by the Vref pot and the driver defaults to StealthChop.
 
 ---
 
@@ -57,13 +112,13 @@ Doc source: ______________________
 
 The **driver**, not the motor, is the binding constraint.
 
-- NEMA 17, ~40 N·cm: typically rated **1.5–1.7 A/phase**
+- Current small motor (0.13 N·m): rated **1.0 A/phase** — target **1.0 A RMS**
+- Upgrade motor 17HE15-1504S (0.42 N·m): rated **1.5 A/phase** — target **1.5 A RMS**
 - Bare TMC2209, no heatsink, no airflow: realistically **~1.2 A RMS** sustained
-- With a heatsink: **~1.4 A RMS**
+- With a heatsink: **~1.7 A RMS** (needed for the upgrade motor)
 
-**Target 1.0–1.2 A RMS** as a starting point. This is well under the motor's
-rating, which is fine — you have torque headroom in the motor and thermal
-headroom is what you're short of.
+**Note:** with UART (v1.9.0+), current is set in config.h and this section
+is informational only. The Vref pot is overridden.
 
 If you need more torque than 1.2 A provides, add a heatsink to the driver
 before raising current further.
@@ -139,7 +194,8 @@ position.
 
 ## Step 6 — StealthChop vs SpreadCycle
 
-**Try this before spending much time on VREF. It may matter more.**
+**With UART (v1.9.0+), SpreadCycle is enabled automatically** via
+`en_spreadCycle(true)` at boot. This section only applies to standalone mode.
 
 With `PDN_UART` floating (standalone mode), the TMC2209 defaults to
 **StealthChop2**: quiet, but noticeably weaker at speed and sluggish responding
@@ -150,12 +206,9 @@ doing multi-revolution spins.
 cost of audible motor noise. On this device a mechanical spin noise is
 thematically fine — arguably a feature.
 
-**To switch:** tie the `SPREAD` pin **HIGH** (to 3.3 V). Implementation varies:
-some boards expose it on the header, some use a solder jumper, some label it
-`SPRD`. Check your board's pinout.
-
-**Test:** run a full 4-glass flight loaded, both ways, and compare Glass Diag
-offsets. Expect SpreadCycle to be louder and more accurate.
+**To switch in standalone mode:** tie the `SPREAD` pin **HIGH** (to 3.3 V).
+Implementation varies: some boards expose it on the header, some use a solder
+jumper, some label it `SPRD`. Check your board's pinout.
 
 ---
 
@@ -196,9 +249,11 @@ Date configured:          ______________________
 
 Blind Flight firmware assumes **8× microstepping = 1600 microsteps/rev**.
 
-That is the TMC2209 standalone default with **MS1 and MS2 unconnected**. Do not
-add pull-ups or jumpers to those pins — the firmware constants
-(`MICROSTEPS_PER_REV`, `MICROSTEPS_PER_GLASS`, `POUR_OFFSET`) all depend on it.
+With UART (v1.9.0+), this is set via the `microsteps(8)` register write.
+In standalone mode, it is the TMC2209 default with **MS1 and MS2
+unconnected**. Either way, do not add pull-ups or jumpers to MS1/MS2 —
+the firmware constants (`MICROSTEPS_PER_REV`, `MICROSTEPS_PER_GLASS`,
+`POUR_OFFSET`) all depend on 8×.
 
 **Symptom of a wrong microstepping setting:** the disc alternates between two
 positions instead of visiting four, or lands at half/double the expected angles.
