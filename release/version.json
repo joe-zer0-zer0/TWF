@@ -1,7 +1,7 @@
 {
-  "version": "1.8.0",
+  "version": "1.9.0",
   "url": "https://github.com/joe-zer0-zer0/TWF/releases/latest/download/firmware.bin",
-  "notes": "Release 1.8.0",
-  "size": 1319984,
-  "sha256": "0db77cd4776729e21081aea2f5e8a1284d2830c72f23a9841061e0ca91ddaf80"
+  "notes": "Release 1.9.0",
+  "size": 1333872,
+  "sha256": "a75f8af44d255ad12fc04b154647c26c8ba41b264ae00277f69c756416b1f9dd"
 }

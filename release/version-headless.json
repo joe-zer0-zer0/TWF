@@ -1,7 +1,7 @@
 {
-  "version": "1.8.0",
+  "version": "1.9.0",
   "url": "https://github.com/joe-zer0-zer0/TWF/releases/latest/download/firmware-headless.bin",
-  "notes": "Release 1.8.0 (headless)",
-  "size": 1099232,
-  "sha256": "ba9d299ff0d3f5135172a7778def88497c2ed65db70945619903daa8984fca1c"
+  "notes": "Release 1.9.0 (headless)",
+  "size": 1115744,
+  "sha256": "0677d2279b7c18efb9b5b4b036be4991eaa0edcf696668ce66c03724f118b9de"
 }
