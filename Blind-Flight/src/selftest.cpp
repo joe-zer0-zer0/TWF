@@ -8,6 +8,7 @@
 #include "game.h"
 #include "h2h.h"
 #include "battery.h"
+#include "led.h"
 
 #include <string.h>
 
@@ -57,6 +58,7 @@ static int wrapErr(int e) {
 static void serviceBreak() {
     if (sProgress) sProgress();
     audioUpdate();
+    ledTick();
     // Service only, never wifiPortalUpdate(): the full tick pushes and
     // pops screens for the pending-wifi_connect flow, and nesting that
     // inside a blocking run corrupts the screen stack.

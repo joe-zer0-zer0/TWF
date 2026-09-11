@@ -13,6 +13,7 @@
 #include "telemetry.h"
 #include "battery.h"
 #include "selftest.h"
+#include "led.h"
 #ifndef HEADLESS_BUILD
 #include "screens.h"
 #include "screen_attract.h"
@@ -827,12 +828,13 @@ static int buildStateJSON(char* buf, int bufLen) {
     if (!active) {
         return snprintf(buf, bufLen,
                         "{\"a\":false,\"sta\":%s,\"serial\":\"%s\",\"n\":%d,"
-                        "\"bp\":%d,\"bl\":%s,\"bk\":%s}",
+                        "\"bp\":%d,\"bl\":%s,\"bk\":%s,\"bc\":%s}",
                         staMode ? "true" : "false", deviceGetSerial(),
                         settingsGetGlassCount(),
                         batteryGetPercent(),
                         batteryIsLow()     ? "true" : "false",
-                        batteryIsLockout() ? "true" : "false");
+                        batteryIsLockout() ? "true" : "false",
+                        ledIsCharging()    ? "true" : "false");
     }
 
     GameState gs = gameGetState();
@@ -872,11 +874,12 @@ static int buildStateJSON(char* buf, int bufLen) {
 
     pos += snprintf(buf + pos, JSON_REM,
         "{\"a\":true,\"s\":\"%s\",\"m\":\"%s\",\"p\":%d,\"sta\":%s"
-        ",\"bp\":%d,\"bl\":%s,\"bk\":%s",
+        ",\"bp\":%d,\"bl\":%s,\"bk\":%s,\"bc\":%s",
         sc, mc, pc, staMode ? "true" : "false",
         batteryGetPercent(),
         batteryIsLow()     ? "true" : "false",
-        batteryIsLockout() ? "true" : "false");
+        batteryIsLockout() ? "true" : "false",
+        ledIsCharging()    ? "true" : "false");
 
     if (gameIsSpinning()) {
         pos += snprintf(buf + pos, JSON_REM, ",\"sp\":true");
@@ -1259,6 +1262,8 @@ static void handleOtaStart() {
 
     broadcastOtaJSON("installing", nullptr);
     flushOtaNotice();
+
+    ledSetOtaOverride(true);
 
     // Detach the buzzer from LEDC before flash writes — the peripheral can
     // glitch during OTA and pull the pin LOW, which is ON for the inverted

@@ -8,6 +8,7 @@
 #include "settings.h"
 #include "battery.h"
 #include "persist.h"
+#include "led.h"
 
 #ifndef HEADLESS_BUILD
 #include "transitions.h"
@@ -79,6 +80,7 @@ static void delayWithAudio(unsigned long ms) {
     while (millis() - start < ms) {
         audioUpdate();
         wifiPortalService();
+        ledTick();
         delay(1);
     }
 }

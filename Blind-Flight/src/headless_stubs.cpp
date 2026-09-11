@@ -8,6 +8,7 @@
 #include "game.h"
 #include "h2h.h"
 #include "settings.h"
+#include "led.h"
 
 // ============================================================
 // Headless stubs — no-op implementations of screen-only APIs
@@ -226,18 +227,26 @@ void transSlotRoll(int, int, int, int, const char*, uint16_t, uint16_t, int) {}
 // times on failure (no screen to prompt the user).
 
 bool runHomingSequence() {
+    ledSetState(LED_HOMING);
+    ledTick();
+
     const int MAX_RETRIES = 3;
     for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
         Serial.printf("[Headless] Homing attempt %d/%d\n", attempt + 1, MAX_RETRIES);
         if (motorHome(attempt)) {
             audioPlayTone(TONE_HOME_FOUND);
+            ledSetState(LED_READY);
             Serial.println("[Headless] Homing succeeded");
             return true;
         }
         audioPlayTone(TONE_ERROR);
+        ledSetState(LED_ERROR);
+        ledTick();
         Serial.println("[Headless] Homing failed, retrying...");
         delay(500);
+        ledSetState(LED_HOMING);
     }
+    ledSetState(LED_ERROR);
     Serial.println("[Headless] Homing failed after all retries");
     return false;
 }

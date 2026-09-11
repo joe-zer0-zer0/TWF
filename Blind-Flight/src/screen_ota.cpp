@@ -5,6 +5,7 @@
 #include "ota.h"
 #include "wifi_portal.h"
 #include "transitions.h"
+#include "led.h"
 
 // ============================================================
 // Blind Flight — OTA Update Screen
@@ -194,6 +195,8 @@ static void doInstall() {
     otaProgress = 0;
     uiRequestRedraw();
     otaDraw(true);
+
+    ledSetOtaOverride(true);
 
     // Detach buzzer from LEDC before flash writes — the peripheral can
     // glitch during OTA, pulling the pin LOW (which is ON for the

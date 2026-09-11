@@ -59,6 +59,13 @@
 #define BATT_FULL_V     8.40f   // 2S fully charged
 #define BATT_EMPTY_V    6.00f   // 2S cutoff (3.0 V/cell)
 
+// Status LED — common-cathode bi-color (red/green)
+// Each anode through a current-limiting resistor to a GPIO.
+// Uncomment PIN_CHRG_SENSE if the BMS CHRG output is wired.
+#define PIN_LED_RED     2       // Red anode — LEDC channel 4
+#define PIN_LED_GREEN   19      // Green anode — LEDC channel 5
+// #define PIN_CHRG_SENSE  39   // BMS CHRG pin (active LOW = charging); input-only, needs external pull-up
+
 // --- Buzzer LEDC config ---
 #define BUZZER_CHANNEL      0    // LEDC channel (0–15)
 #define BUZZER_RESOLUTION   8    // 8-bit duty resolution

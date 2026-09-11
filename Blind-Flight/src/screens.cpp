@@ -11,6 +11,7 @@
 #include "battery.h"
 #include "persist.h"
 #include "wifi_portal.h"
+#include "led.h"
 
 // ============================================================
 // Shared state between screens
@@ -287,6 +288,7 @@ const Screen screenDetail = {
 bool runHomingSequence() {
     TFT_eSPI* tft = uiGetTFT();
     int attempt = 0;   // recorded in telemetry; user-driven retries are unbounded
+    ledSetState(LED_HOMING);
 
     while (true) {
         tft->fillScreen(COL_BG);
@@ -299,6 +301,7 @@ bool runHomingSequence() {
         while (millis() - waitStart < 300) {
             audioUpdate();
             wifiPortalService();
+            ledTick();
             delay(1);
         }
 
@@ -309,6 +312,7 @@ bool runHomingSequence() {
         if (found) {
             Serial.println("[Homing] Home found!");
             audioPlayTone(TONE_HOME_FOUND);
+            ledSetState(LED_READY);
 
             tft->fillScreen(COL_BG);
             uiDrawTitleBar("HOMED", COL_SELECTED);
@@ -318,6 +322,7 @@ bool runHomingSequence() {
             while (millis() - doneWait < 800) {
                 audioUpdate();
                 wifiPortalService();
+                ledTick();
                 delay(1);
             }
             return true;
@@ -325,6 +330,7 @@ bool runHomingSequence() {
         } else {
             Serial.println("[Homing] FAILED — magnet not detected");
             audioPlayTone(TONE_ERROR);
+            ledSetState(LED_ERROR);
 
             tft->fillScreen(COL_BG);
             uiDrawTitleBar("HOME FAILED", COL_ERROR);
@@ -344,6 +350,7 @@ bool runHomingSequence() {
                 // takes every connected phone down with it until someone
                 // walks over to the device.
                 wifiPortalService();
+                ledTick();
                 inputUpdate();
                 InputEvent evt = inputGetEvent();
                 if (evt == INPUT_BTN_LEFT || evt == INPUT_BTN_RIGHT ||

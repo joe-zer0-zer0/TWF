@@ -17,6 +17,7 @@
 #include "telemetry.h"
 #include "selftest.h"
 #include "ui.h"
+#include "led.h"
 
 #ifndef HEADLESS_BUILD
 #include <TFT_eSPI.h>
@@ -38,6 +39,7 @@ void setup() {
     // See ota.h.
 
     deviceIdInit();
+    ledInit();
 
     settingsInit();
     favoritesInit();
@@ -85,6 +87,8 @@ void setup() {
     Serial.println("[Main] Headless mode — Wi-Fi portal active");
 #endif
 
+    ledSetState(LED_READY);
+
     Serial.println("[Main] Setup complete, entering main loop\n");
 }
 
@@ -106,6 +110,8 @@ void loop() {
     // been requested, and returns immediately otherwise. It services
     // the portal itself between moves.
     selfTestUpdate();
+
+    ledUpdate();
 
     delay(1);
 }
