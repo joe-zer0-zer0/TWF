@@ -31,6 +31,11 @@ enum LedState {
 
 void ledInit();
 
+// Re-attach LEDC PWM to LED GPIO pins. Call after any peripheral
+// init that may have reclaimed a shared pin (e.g. SPI claims
+// GPIO 19 as VSPI MISO even when passed -1).
+void ledReattachPins();
+
 // Call from loop(). Determines effective state (applies battery/OTA
 // overrides on top of the caller-set state) and drives animation.
 void ledUpdate();

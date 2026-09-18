@@ -11,7 +11,7 @@
 #include <Arduino.h>
 
 // --- Firmware version ---
-#define FW_VERSION  "1.9.0"
+#define FW_VERSION  "1.9.1"
 
 // --- Pin definitions (from hardware spec) ---
 
@@ -39,9 +39,9 @@
 // UART address: set by MS1/MS2. Both unconnected = internal pull-down = 0.
 #define TMC_DRIVER_ADDRESS  0b00
 // Motor RMS current in milliamps. Set to the motor's rated current.
-// Small motor (current): 1000 mA, 0.13 N·m, 3.5Ω, 5.2mH
-// Large motor (17HE15-1504S): 1500 mA, 0.42 N·m, 2.3Ω, 4.0mH
-#define TMC_RUN_CURRENT_MA  1000
+// Small motor: 1000 mA, 0.13 N·m, 3.5Ω, 5.2mH
+// Large motor (17HE15-1504S, installed): 1500 mA, 0.42 N·m, 2.3Ω, 4.0mH
+#define TMC_RUN_CURRENT_MA  1500
 // Hold current as fraction of run current (0–31 scale, 16 ≈ 50%)
 #define TMC_HOLD_CURRENT    16
 // Delay before hold current kicks in after last step (0–15, each unit ≈ 2^18 clocks)
@@ -78,8 +78,8 @@
 // Motor direction mapping — based on physical wiring.
 // DIR pin level that produces clockwise disc rotation viewed from top.
 // If positions 2 & 4 appear swapped, flip these values.
-#define MOTOR_CW_DIR    LOW
-#define MOTOR_CCW_DIR   HIGH
+#define MOTOR_CW_DIR    HIGH
+#define MOTOR_CCW_DIR   LOW
 
 // Pour spout offset from home position (microsteps).
 // The pour spout is 135° CCW from the Hall sensor.

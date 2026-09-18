@@ -218,6 +218,15 @@ void ledInit() {
     Serial.println("[LED] Init complete");
 }
 
+void ledReattachPins() {
+#ifdef PIN_LED_RED
+    ledcAttachPin(PIN_LED_RED, LED_RED_CHANNEL);
+#endif
+#ifdef PIN_LED_GREEN
+    ledcAttachPin(PIN_LED_GREEN, LED_GREEN_CHANNEL);
+#endif
+}
+
 void ledSetState(LedState state) {
     baseState = state;
 }

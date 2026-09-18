@@ -304,34 +304,34 @@ void motorInit() {
         tmcUartOk = false;
         Serial.printf("[TMC] UART FAILED — version register returned 0x%02X "
                       "(expected 0x21). Check TX/RX wiring.\n", version);
-        return;
     }
 
-    // Enable the driver's internal step/dir interface
-    tmcDriver.toff(4);
+    if (tmcUartOk) {
+        tmcDriver.toff(4);
+        tmcDriver.rms_current(TMC_RUN_CURRENT_MA);
+        tmcDriver.ihold(TMC_HOLD_CURRENT);
+        tmcDriver.iholddelay(TMC_IHOLDDELAY);
+        tmcDriver.en_spreadCycle(true);
+        tmcDriver.microsteps(8);
 
-    // Current: set digitally, overrides the Vref pot
-    tmcDriver.rms_current(TMC_RUN_CURRENT_MA);
-    tmcDriver.ihold(TMC_HOLD_CURRENT);
-    tmcDriver.iholddelay(TMC_IHOLDDELAY);
-
-    // SpreadCycle for maximum torque (StealthChop is quieter but weaker)
-    tmcDriver.en_spreadCycle(true);
-
-    // Microstepping: 8× (matches MICROSTEPS_PER_REV = 1600).
-    // Interpolation to 256 is on by default and stays on — it smooths
-    // the motion without changing the step count.
-    tmcDriver.microsteps(8);
-
-    // Read back actual values for confirmation
-    uint16_t actualCurrent = tmcDriver.cs2rms(tmcDriver.irun());
-    Serial.printf("[TMC] Config: %d mA RMS, SpreadCycle=%d, microsteps=%d, "
-                  "IRUN=%d, IHOLD=%d\n",
-                  actualCurrent,
-                  tmcDriver.en_spreadCycle() ? 1 : 0,
-                  tmcDriver.microsteps(),
-                  tmcDriver.irun(),
-                  tmcDriver.ihold());
+        uint16_t actualCurrent = tmcDriver.cs2rms(tmcDriver.irun());
+        Serial.printf("[TMC] Config: %d mA RMS, SpreadCycle=%d, microsteps=%d, "
+                      "IRUN=%d, IHOLD=%d\n",
+                      actualCurrent,
+                      tmcDriver.en_spreadCycle() ? 1 : 0,
+                      tmcDriver.microsteps(),
+                      tmcDriver.irun(),
+                      tmcDriver.ihold());
+    } else {
+        // begin() may have sent UART frames that the TMC2209 interpreted as
+        // register writes, potentially zeroing toff (which disables MOSFET
+        // outputs). Blindly write toff=4 to re-enable the driver even though
+        // we can't verify the write took effect.
+        tmcDriver.toff(4);
+        tmcDriver.rms_current(TMC_RUN_CURRENT_MA);
+        tmcDriver.microsteps(8);
+        Serial.println("[TMC] Standalone fallback: sent blind toff/current/microstep writes");
+    }
 }
 
 // ============================================================

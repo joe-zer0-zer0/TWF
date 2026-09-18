@@ -65,6 +65,11 @@ void setup() {
     motorSetHomeOffset(settingsGetHomeOffset());
     uiInit(&tft);
 
+    // SPI.begin() inside tft.init() reclaims GPIO 19 as VSPI MISO
+    // (the Arduino-ESP32 HAL forces default pins even when -1 is passed).
+    // Re-attach the LEDC channels so the status LED works.
+    ledReattachPins();
+
     if (settingsGetWifiOn()) {
         wifiPortalInit();
     } else {
