@@ -100,7 +100,7 @@ margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;alig
 var S=null,ws=null,lk=false,F=null,fOpen=false;
 var H=null,HY=null,HR=null,HJ=false,HN='';
 var hg0=-1,hg1=-1,hClaim=0;
-var wOpen=false,wNets=null,wSel='',wSta=false,wMsg='';
+var wOpen=false,wNets=null,wSel='',wSta=false,wMsg='',wScan=false,wMan=false;
 var authed=false,pendPin='';
 var h2hSetup=null;
 var SET=null,sOpen=false;
@@ -152,7 +152,8 @@ if(d.t==='h2h'){H=d;lk=false;rh();return;}
 if(d.t==='h2h_you'){HY=d;lk=false;rh();return;}
 if(d.t==='h2h_result'){HR=d;lk=false;rh();return;}
 if(d.t==='h2h_err'){lk=false;return;}
-if(d.t==='wifi_nets'){wNets=d.nets;lk=false;rwifi();return;}
+if(d.t==='wifi_nets'){wNets=d.nets;wScan=false;lk=false;rwifi();return;}
+if(d.t==='wifi_confirm'){wMsg='Confirm on the device screen to join '+d.s;rwifi();return;}
 if(d.t==='dg_busy'){lk=false;dgAsk=false;rn();return;}
 if(d.t==='wifi_status'){lk=false;
 if(d.ok){wMsg='Connected! IP: '+d.ip;wSta=true;}
@@ -526,18 +527,21 @@ function favDel(i){tx({a:'fav_del',v:i});}
 function rwifi(){
 var wc=$('wc');
 if(!wc)return;
+var om=$('wm'),op=$('wp'),mv=om?om.value:'',pv=op?op.value:'';
 var h='<div class="fhdr" onclick="wOpen=!wOpen;rwifi()"><div class="st" style="margin:0">Wi-Fi Setup</div><span>'+(wOpen?'▲':'▼')+'</span></div>';
 if(wOpen){
-if(wMsg){h+='<div class="msg" style="color:'+(wSta?'#4CAF50':'#F44336')+'">'+esc(wMsg)+'</div>';}
+if(wMsg){h+='<div class="msg" style="color:'+(wSta?'#4CAF50':wMsg.indexOf('failed')>=0?'#F44336':'#D4A547')+'">'+esc(wMsg)+'</div>';}
 if(wSta){
 h+='<div class="hint">Reconnect to your network, then visit the IP above or http://flight.local</div>';
 }else{
-h+='<button class="btn bs" onclick="wNets=null;wSel=\'\';wMsg=\'\';tx({a:\'wifi_scan\'})">Scan for Networks</button>';
-if(wNets){
+h+='<button class="btn bs" onclick="wScan1()"'+(wScan?' disabled':'')+'>'+(wScan?'Scanning...':'Scan for Networks')+'</button>';
+if(wScan)h+='<div class="hint">This can take up to 20 seconds</div>';
+if(wNets&&!wMan){
+if(!wNets.length)h+='<div class="msg">No networks found. Scan again, or enter the name below.</div>';
 for(var i=0;i<wNets.length;i++){
 var n=wNets[i];
 var sel=wSel===n.s;
-h+='<div class="wnet'+(sel?' sel':'')+'" onclick="wSel=\''+esc(n.s).replace(/'/g,"\\'")+'\';rwifi()">';
+h+='<div class="wnet'+(sel?' sel':'')+'" onclick="wSel=\''+esc(n.s).replace(/'/g,"\'")+'\';rwifi()">';
 h+='<span>'+esc(n.s)+(n.e?'<span class="wlock"> 🔒</span>':'')+'</span>';
 h+='<span class="wrssi">'+rssiBar(n.r)+'</span></div>';
 }
@@ -546,9 +550,25 @@ h+='<input type="password" id="wp" placeholder="Password for '+esc(wSel)+'" auto
 h+='<button class="btn bp" onclick="wconn()">Connect</button>';
 }
 }
+if(wMan){
+h+='<input type="text" id="wm" maxlength="32" placeholder="Network name (case-sensitive)" autocomplete="off" autocapitalize="off" spellcheck="false">';
+h+='<input type="password" id="wp" placeholder="Password" autocomplete="off">';
+h+='<button class="btn bp" onclick="wconn()">Connect</button>';
+h+='<div class="hint" onclick="wMan=false;rwifi()" style="text-decoration:underline;cursor:pointer">Back to network list</div>';
+}else{
+h+='<div class="hint" onclick="wMan=true;wSel=\'\';rwifi()" style="text-decoration:underline;cursor:pointer">Enter network name manually</div>';
+}
 }
 }
 wc.innerHTML=h;
+if(mv&&$('wm'))$('wm').value=mv;
+if(pv&&$('wp'))$('wp').value=pv;
+}
+function wScan1(){
+if(wScan)return;
+wNets=null;wSel='';wMsg='';wScan=true;rwifi();
+txf({a:'wifi_scan'});
+setTimeout(function(){if(wScan){wScan=false;wNets=[];rwifi();}},30000);
 }
 function rssiBar(r){
 var b=r>-50?4:r>-60?3:r>-70?2:1;
@@ -556,10 +576,12 @@ var s='';for(var i=0;i<4;i++)s+=i<b?'▰':'▱';
 return s;
 }
 function wconn(){
-var wp=$('wp');
+var wp=$('wp'),wm=$('wm');
 var p=wp?wp.value:'';
-wMsg='Connecting...';rwifi();
-tx({a:'wifi_connect',s:wSel,p:p});
+var s=wMan?(wm?wm.value.trim():''):wSel;
+if(!s){wMsg='Enter a network name';rwifi();return;}
+wMsg='Sending...';rwifi();
+txf({a:'wifi_connect',s:s,p:p});
 }
 function showSetCard(){
 var sc=$('sc');
@@ -866,7 +888,7 @@ if(e.key==='Enter'&&S&&S.s==='BS')sb();
 if(e.key==='Enter'&&fOpen&&document.activeElement===$('fi'))favAdd();
 if(e.key==='Enter'&&!HJ&&$('hn')&&document.activeElement===$('hn'))hjoin();
 if(e.key==='Enter'&&h2hSetup&&h2hSetup.step==='bottles'&&document.activeElement===$('hbi'))h2hBottle();
-if(e.key==='Enter'&&wOpen&&wSel&&document.activeElement===$('wp'))wconn();
+if(e.key==='Enter'&&wOpen&&(wSel||wMan)&&document.activeElement===$('wp'))wconn();
 });
 cn();
 </script>

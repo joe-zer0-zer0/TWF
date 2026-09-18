@@ -1469,6 +1469,11 @@ static void jsonUnescapeInPlace(char* s) {
 // scan off asynchronously and collect the result from wifiPortalUpdate().
 static bool          scanPending   = false;
 static unsigned long scanStartMs   = 0;
+static uint8_t       scanRetries   = 0;     // failed starts retried so far
+static unsigned long scanRetryAtMs = 0;     // when to retry; 0 = no retry queued
+
+#define SCAN_MAX_RETRIES   3
+#define SCAN_RETRY_MS      750
 
 static void publishWifiScanResults(int n) {
     if (n < 0) n = 0;
@@ -1494,22 +1499,60 @@ static void publishWifiScanResults(int n) {
     Serial.printf("[WiFi] Scan complete: %d networks\n", n);
 }
 
+// Kick off one async scan attempt. Returns false if the radio refused
+// to start it.
+//
+// A scan needs the STA (station) half of the radio. In setup mode the
+// device used to run AP-only, so WiFi.scanNetworks() had to switch STA
+// on and start the scan in the same instant — and the scan was refused
+// before STA finished starting ("Scan failed" immediately, 0 networks;
+// seen on the second prototype, v1.9.1). The portal now runs AP+STA,
+// but a refused start is still retried a few times rather than
+// reported as "no networks".
+static bool startWifiScanAttempt() {
+    WiFi.scanDelete();          // clear any results left from a prior scan
+    int16_t r = WiFi.scanNetworks(true);    // async — collected in pollWifiScan()
+    Serial.printf("[WiFi] Scan start (attempt %u, mode %d) -> %d\n",
+                  scanRetries + 1, (int)WiFi.getMode(), r);
+    return r == WIFI_SCAN_RUNNING;
+}
+
 static void handleWifiScan() {
     if (scanPending) {
         Serial.println("[WiFi] Scan already in progress");
         return;
     }
     Serial.println("[WiFi] Starting network scan...");
-    WiFi.scanDelete();          // clear any results left from a prior scan
-    WiFi.scanNetworks(true);    // async — result collected in wifiPortalUpdate()
-    scanPending = true;
-    scanStartMs = millis();
+    scanRetries   = 0;
+    scanRetryAtMs = 0;
+    scanPending   = true;
+    scanStartMs   = millis();
+    if (!startWifiScanAttempt()) {
+        scanRetries++;
+        scanRetryAtMs = millis() + SCAN_RETRY_MS;
+    }
 }
 
 // Called from wifiPortalUpdate(). Returns as soon as the scan is still
 // running, so the loop keeps servicing WebSockets throughout.
 static void pollWifiScan() {
     if (!scanPending) return;
+
+    // A refused start is waiting for its retry slot
+    if (scanRetryAtMs) {
+        if ((long)(millis() - scanRetryAtMs) < 0) return;
+        scanRetryAtMs = 0;
+        if (!startWifiScanAttempt()) {
+            if (++scanRetries > SCAN_MAX_RETRIES) {
+                Serial.println("[WiFi] Scan failed: radio refused every attempt");
+                scanPending = false;
+                publishWifiScanResults(0);
+            } else {
+                scanRetryAtMs = millis() + SCAN_RETRY_MS;
+            }
+        }
+        return;
+    }
 
     int n = WiFi.scanComplete();
     if (n == WIFI_SCAN_RUNNING) {
@@ -1524,12 +1567,18 @@ static void pollWifiScan() {
         return;
     }
 
-    scanPending = false;
     if (n == WIFI_SCAN_FAILED) {
+        if (++scanRetries <= SCAN_MAX_RETRIES) {
+            Serial.println("[WiFi] Scan failed, retrying");
+            scanRetryAtMs = millis() + SCAN_RETRY_MS;
+            return;
+        }
         Serial.println("[WiFi] Scan failed");
+        scanPending = false;
         publishWifiScanResults(0);
         return;
     }
+    scanPending = false;
     publishWifiScanResults(n);
 }
 
@@ -1580,7 +1629,7 @@ static void handleWifiConnect(const char* ssid, const char* pass) {
         Serial.println("[WiFi] STA connection failed, reverting to AP");
         staMode = false;
         WiFi.disconnect(true);
-        WiFi.mode(WIFI_AP);
+        WiFi.mode(WIFI_AP_STA);   // STA half kept up so scans work (see handleWifiScan)
         WiFi.softAP(AP_SSID, apPassword);
 
         IPAddress apIP = WiFi.softAPIP();
@@ -2206,7 +2255,7 @@ void wifiPortalInit() {
     // --- Fall back to AP mode ---
     if (!staMode) {
         Serial.println("[WiFi] Starting soft AP...");
-        WiFi.mode(WIFI_AP);
+        WiFi.mode(WIFI_AP_STA);   // STA half kept up so scans work (see handleWifiScan)
         WiFi.softAP(AP_SSID, apPassword);
 
         IPAddress apIP = WiFi.softAPIP();
@@ -2391,7 +2440,7 @@ void wifiReconnect() {
         Serial.println("[WiFi] Reconnect failed, reverting to AP");
         staMode = false;
         WiFi.disconnect(true);
-        WiFi.mode(WIFI_AP);
+        WiFi.mode(WIFI_AP_STA);   // STA half kept up so scans work (see handleWifiScan)
         WiFi.softAP(AP_SSID, apPassword);
         IPAddress apIP = WiFi.softAPIP();
         dnsServer.start(DNS_PORT, "*", apIP);
