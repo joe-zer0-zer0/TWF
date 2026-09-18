@@ -19,6 +19,7 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 * **Input:** KY-040 rotary encoder + two soft buttons (context-labeled by display)
 * **Homing:** Hall effect sensor + neodymium magnet embedded in disc
 * **Audio:** MH-FMD passive buzzer module — **inverted logic: LOW = on**
+* **Status LED:** Common-cathode bi-color (red/green) LED on GPIO 2 (red) and GPIO 19 (green). Each anode through a current-limiting resistor. Red + green = amber. 13 firmware states with priority-based resolution. Optional TP4056 CHRG sense on GPIO 39 (not yet wired).
 * **Power:** 2S Li-ion pack (7.4V nominal), TP4056 2S BMS w/ USB-C, buck converter → 5V to ESP32 VIN, ESP32 onboard regulator → 3.3V rail. Voltage divider on **GPIO 36** for battery monitoring.
 * **Assembly:** Breakout boards on perfboard with **star ground topology**. Custom PCB deliberately deferred until design stabilizes.
 
@@ -33,6 +34,8 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 |Left / Right button|14 / 12|Internal pull-ups, active LOW|
 |Hall sensor|35|Input-only, external 10kΩ pull-up|
 |Buzzer|13|PWM tones; MH-FMD inverted (LOW = on)|
+|Status LED red / green|2 / 19|Common-cathode bi-color; LEDC PWM ch 4/5|
+|BMS CHRG sense|39|Optional (commented out); input-only, needs external pull-up|
 |Battery ADC|36|ADC1 — must use `analogReadMilliVolts()`|
 
 ### Key Geometry \& Motion Constants
@@ -61,11 +64,12 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 
 ## Current State
 
-* **Released firmware: v1.9.0.** Master is clean and both manifests match their published assets. v1.9.0 adds TMC2209 UART control (SpreadCycle + digital current setting); gracefully falls back to standalone mode if UART not wired.
+* **Released firmware: v1.9.2.** Both manifests match their published assets. v1.9.2 runs setup mode as AP+STA and adds manual network-name entry on the phone. **The phone Wi-Fi scan still returns 0 networks in setup mode** (large-motor prototype, 2026-09-17); manual entry is the working path until that is diagnosed. v1.9.0 adds TMC2209 UART control (SpreadCycle + digital current setting); gracefully falls back to standalone mode if UART not wired.
 * **The headless build is now actually playable (v1.6.0).** Through v1.5.4 it compiled and booted but no flight could start or advance: `ui.cpp` is excluded by `build_src_filter` and the stub `uiUpdate()` drained nothing, so `gameDraw()` (the deferred phone-action pump) and `gameInput()` (which the phone's Done/Reveal/Back buttons reach via `inputInjectEvent`) never ran. `headless_stubs.cpp` now keeps a real screen stack and dispatches input and draw. **Head-to-Head is still broken headless** — `h2hInput()` and `screenH2H` are inside the screen-only block and there is no phone action to confirm an H2H pour, so a game reaches the first pour and stops. Solo modes are fine.
 * **Mechanical (in progress, Jeremy's bench):** PTFE furniture pads confirmed working in initial testing. Carrier plate (attaches to top of motor) and set-screw placement/materials currently in physical prototyping. Ball transfer units at 120° spacing remain the fallback if needed. Final battery/charging part selection also open.
 * **Alignment baseline — read before planning motor work.** The Session 9 auto-diag capture archived at `docs/baselines/selftest_baseline_2026-07-28_fw1.5.2.log` came back **inside the roadmap's goal thresholds**: interGlassSpread=3, worstScatter=3, accumMax=1, 24 reads / 0 failed. Per-position means were `+1, +1, -2, 0` — **glass 4 was not the worst**, contradicting the impression that drove the alignment roadmap. The run is **unloaded** (the auto-diag requires glasses off — many revolutions at speed), so the residual error users could identify at the event is most likely load-dependent, pointing at the mechanical work above rather than at firmware.
 * **Pour-side selection** — fully implemented. Settings menu item cycles Front/Right/Rear/Left, NVS-persistent, runtime offset applied to all motor glass positioning.
+* **Status LED — shipped (v1.9.1).** Common-cathode bi-color (red/green) LED replaces the WS2812B originally planned in the phone-only architecture spec. 13 distinct states (boot/homing/ready/game/spinning/pouring/tasting/low-battery/lockout/charging/OTA/error/off) with priority-based resolution. `ledTick()` called from all blocking loops for smooth animation. Optional TP4056 CHRG pin support (GPIO 39, not yet wired).
 * **Shipped game modes:** Basic, Named, Best Guess, Ranked, Guess+Rank, Twin Pour (`GAME\_MODE\_DUPLICATE`), Find the Ringer (`GAME\_MODE\_DECOY`), Head-to-Head (all three sub-modes). Also shipped: favorites list, library metadata (proof / price tier / age) + star-rating round, STA mode + mDNS, OTA, telemetry `/log`, auto self-test, battery indicator with low-battery warning and lockout, NVS-persistent home-offset calibration.
 
 ## Roadmap
@@ -76,7 +80,7 @@ Jeremy is the sole designer/developer across hardware, firmware, and enclosure. 
 2. **Shareable results card** — spec in `docs/specs/share_card_spec.md`, Phase 1 (rank-aware payload + poster-styled phone results view) not started. Phone UI + `wifi\_portal.cpp` only; zero hardware dependency.
 3. **Pour animation** (procedural: glass outline drawn in code, filled with amber rectangle — no flash cost)
 4. **Session 8 — motor task migration.** Deferred, but elevated for the headless build: a blocking motor loop is indistinguishable from a hung device with no screen, and it is the one failure mode the OTA rollback net cannot catch (it catches crashes, not hangs).
-5. **Headless status LED** (WS2812B) — the one unbuilt piece of `docs/specs/phone_only_architecture.md`; the two-environment build split itself is done.
+5. ~~**Headless status LED**~~ — **Done (v1.9.1).** Implemented as common-cathode bi-color (red/green) instead of WS2812B. See `led.h`/`led.cpp`. The phone-only architecture spec's LED session (Session 4) is satisfied for both builds.
 6. Whiskey library expansion
 7. Validate pour-side selection during beta
 8. Deferred Session 14 polish items
@@ -199,6 +203,12 @@ worked normally.
   something bricks, the smaller the diff, the faster the diagnosis.
 * Disassembly to reach the USB port is the fallback, and it is expensive. Assume it
   is unavailable.
+* **One exception: the first flash of a fresh ESP32** in a prototype that is not yet
+  assembled (first case: the large-motor prototype, 2026-09-17, v1.9.2). A blank board
+  has no firmware to receive OTA, so Jeremy flashes it over USB himself. Claude never
+  initiates a USB upload; it builds, publishes the release as usual, and gives Jeremy
+  the `pio run -e <env> -t upload` command only when he says the unit is on USB. Once
+  the unit is on Wi-Fi, everything goes back to OTA.
 
 \---
 
