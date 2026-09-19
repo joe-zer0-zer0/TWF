@@ -10,10 +10,10 @@ Electronics and battery components only. Excludes enclosure materials, magnets (
 |----------|----------|
 | Core electronics | $34.07 |
 | Power | $23.37 |
-| Interface | $1.42 |
+| Interface | $1.54 |
 | Wiring | $8.98 |
 | Board & passives | $2.56 |
-| **Total** | **$70.40** |
+| **Total** | **$70.52** |
 
 ## Core Electronics — $34.07
 
@@ -37,12 +37,13 @@ Electronics and battery components only. Excludes enclosure materials, magnets (
 | 18650 battery holder (2S) | $6.99 | 5 | 1 | $1.40 |
 | Rocker switch (on/off) | $6.39 | 5 | 1 | $1.28 |
 
-## Interface — $1.42
+## Interface — $1.54
 
 | Component | Pack Price | Pack Qty | Per Unit Qty | Per Unit Cost |
 |-----------|-----------|----------|-------------|---------------|
 | Tactile button variety pack | $7.99 | 180 | 2 | $0.09 |
 | PTFE furniture pads | $7.99 | 24 | 4 | $1.33 |
+| Bi-color LED (common-cathode, red/green, 5mm) | $5.99 | 50 | 1 | $0.12 |
 
 ## Wiring — $8.98
 

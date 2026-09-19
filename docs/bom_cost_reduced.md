@@ -10,10 +10,10 @@ Strategy: Amazon for fast-turnaround and quality-critical items; AliExpress/spec
 |----------|----------------|---------|---------|
 | Core electronics | $34.07 | $17.86 | $16.21 |
 | Power | $23.37 | $14.08 | $9.29 |
-| Interface | $1.42 | $1.33 | $0.09 |
+| Interface | $1.54 | $1.38 | $0.16 |
 | Wiring | $8.98 | $3.50 | $5.48 |
 | Board & passives | $2.56 | $1.37 | $1.19 |
-| **Total** | **$70.40** | **$38.14** | **$32.26** |
+| **Total** | **$70.52** | **$38.19** | **$32.33** |
 
 ## Core Electronics — $17.86
 
@@ -44,12 +44,13 @@ Strategy: Amazon for fast-turnaround and quality-critical items; AliExpress/spec
 
 **Battery note:** This is the single biggest cost driver. The specialty battery suppliers sell tested, authentic cells with datasheets. Avoid no-name AliExpress 18650s — capacity claims are often fraudulent. Budget $4–5/cell for quality; $8/pair is conservative.
 
-## Interface — $1.33
+## Interface — $1.38
 
 | Component | Source | Pack Price | Pack Qty | Per Unit Qty | Per Unit Cost | Notes |
 |-----------|--------|-----------|----------|-------------|---------------|-------|
 | Tactile buttons | Amazon | $7.99 | 180 | 2 | $0.09 | Already negligible; keep current source |
 | PTFE furniture pads | Amazon | $7.99 | 24 | 4 | $1.33 | No cheaper source found; consumable anyway |
+| Bi-color LED (common-cathode, red/green, 5mm) | AliExpress | $2.50 | 50 | 1 | $0.05 | Status indicator; current-limiting resistors from passives stock |
 
 *Note: buttons reduced from $0.09 to $0.00 effective change — not worth re-sourcing.*
 

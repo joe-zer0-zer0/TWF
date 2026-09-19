@@ -43,7 +43,7 @@ iPhones drop AP connections that lack internet access. The existing STA-mode fea
 
 ### What Stays
 
-- Motor, Hall sensor, buzzer, battery ADC — unchanged
+- Motor, Hall sensor, buzzer, battery ADC, status LED (GPIO 2/19) — unchanged
 - WiFi AP/STA, WebSocket server, HTTP server, mDNS, captive portal
 - All game logic (`game.cpp`), all modes, all state machines
 - NVS settings persistence, whiskey library, favorites
@@ -53,7 +53,9 @@ iPhones drop AP connections that lack internet access. The existing STA-mode fea
 
 ### New Hardware Needed
 
-**One addressable RGB LED (WS2812B)** — single GPIO, provides boot/ready/error/pouring feedback before the phone connects. Without any visual indicator, the device is a silent black box. The buzzer provides audio feedback but isn't sufficient alone.
+**~~One addressable RGB LED (WS2812B)~~ — Implemented (v1.9.1) as a common-cathode bi-color (red/green) LED** on GPIO 2 (red) and GPIO 19 (green), each anode through a current-limiting resistor. Red + green together produce amber. Driven via LEDC PWM (channels 4 and 5) with 13 distinct states and priority-based resolution. `ledTick()` is called from all blocking loops so animations stay smooth during motor operations. Both builds (screen and headless) include the LED module — it provides visual feedback before the phone connects and supplements the TFT on the screen build.
+
+Optional: TP4056 CHRG sense pin on GPIO 39 (input-only, needs external pull-up) for charging detection — firmware support is in place but the pin is commented out in config.h until wired.
 
 Optional: a single tactile button for power-on or emergency stop. Not strictly required if power switch = on.
 
@@ -90,7 +92,7 @@ A single `platformio.ini` with two environments, distinguished by a compile-time
 | `screens.cpp`, `palate_training.cpp` | **Screen only** | TFT menu dispatch |
 | All `screen_*.cpp` | **Screen only** | Per-screen draw/input handlers |
 | `splash.cpp`, `img_*.h` | **Screen only** | Image assets, boot animation |
-| LED status driver (new) | **Headless only** | WS2812B state indicator |
+| `led.cpp` / `led.h` | **Shared** | Bi-color (red/green) status LED — both builds |
 
 ### Maintenance Cost Per Feature
 
@@ -178,7 +180,7 @@ Staying with 4 MB flash for now (current stock). 8 MB ESP32-WROOM-32E modules (s
 | Function | Issue | Solution |
 |----------|-------|----------|
 | PIN display for WebSocket auth | Currently shown on TFT — no screen to show it | Derive from MAC (like AP password), print on device label, or drop PIN since AP proximity *is* the auth |
-| Boot/ready feedback | No screen to show "Homing..." or "Ready" | WS2812B LED color states + buzzer patterns |
+| Boot/ready feedback | No screen to show "Homing..." or "Ready" | ~~WS2812B~~ Bi-color LED states (amber boot, amber pulse homing, green ready, red error) + buzzer patterns — **implemented v1.9.1** |
 | Mid-flight phone disconnect | No physical controls to advance game state | Device holds state; phone reconnects and picks up. Auto-timeout could abort after extended disconnect |
 | Settings/calibration | Currently screen-based UI | All moves to phone UI (settings page, motor test, calibration wizard) |
 | Offline operation | Currently works without phone | Gone by definition — phone is required. Acceptable for this product tier |
@@ -239,12 +241,12 @@ Work is broken into 5 discrete sessions, each producing a flashable, testable bu
 
 ### Session 4: Headless Hardware & Boot (Phase 3)
 
-1. WS2812B LED driver with state-based color patterns
+1. ~~WS2812B LED driver with state-based color patterns~~ — **Done (v1.9.1).** Implemented as common-cathode bi-color (red/green) LED with 13 states. Included in both builds.
 2. PIN auth rework (MAC-derived or proximity-only)
 3. Phone disconnect handling (state hold + reconnect pickup)
 4. Boot sequence without screen (LED + buzzer for homing feedback)
 
-**Test checkpoint:** Headless build boots with LED color feedback, homes with buzzer/LED cues, handles phone disconnect gracefully. LED wiring required for this session.
+**Test checkpoint:** Headless build boots with LED color feedback, homes with buzzer/LED cues, handles phone disconnect gracefully. ~~LED wiring required for this session.~~ LED is wired and working.
 
 ### Session 5: Polish & Parity (Phase 4)
 
