@@ -66,7 +66,7 @@ static void setBoth(uint8_t r, uint8_t g) {
 static uint8_t pulse(unsigned long periodMs) {
     unsigned long t = (millis() - animStart) % periodMs;
     float phase = (float)t / periodMs * 2.0f * PI;
-    return (uint8_t)((sin(phase - PI / 2.0f) + 1.0f) * 127.5f);
+    return (uint8_t)((sinf(phase - (float)PI / 2.0f) + 1.0f) * 127.5f);
 }
 
 // Square-wave blink: on for onMs, off for offMs
@@ -214,6 +214,7 @@ void ledInit() {
     baseState = LED_BOOT;
     activeState = LED_BOOT;
     animStart = millis();
+    animateState(activeState);   // light amber now — loop() is seconds away
 
     Serial.println("[LED] Init complete");
 }
@@ -244,13 +245,7 @@ void ledUpdate() {
     }
 #endif
 
-    LedState resolved = resolveState();
-    if (resolved != activeState) {
-        activeState = resolved;
-        animStart = millis();
-    }
-
-    animateState(activeState);
+    ledTick();
 }
 
 void ledSetOtaOverride(bool active) {
@@ -262,6 +257,16 @@ void ledSetOtaOverride(bool active) {
     }
 }
 
+// Re-resolves the state as well as animating it. Blocking loops (spins,
+// homing, OTA download) are exactly when the state changes, and loop()
+// isn't running then — animating only the old state left the LED green
+// through every spin and homing run.
 void ledTick() {
+    LedState resolved = resolveState();
+    if (resolved != activeState) {
+        activeState = resolved;
+        animStart = millis();
+    }
+
     animateState(activeState);
 }

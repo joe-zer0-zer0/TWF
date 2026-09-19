@@ -220,6 +220,7 @@ static void doInstall() {
         ESP.restart();
     } else {
         otaPhase = OTA_FAILURE;
+        ledSetOtaOverride(false);
         audioPlayTone(TONE_ERROR);
         uiRequestRedraw();
     }

@@ -1,6 +1,7 @@
 #include "motor.h"
 #include "config.h"
 #include "telemetry.h"
+#include "led.h"
 #include <TMCStepper.h>
 
 // ============================================================
@@ -69,10 +70,23 @@ static bool tmcUartOk = false;
 // ============================================================
 // Low-level step pulse
 // ============================================================
+// Every step loop (spins, homing, self-test) goes through here, so this
+// is the one place that keeps the status LED alive while the motor
+// blocks loop(). Rate-limited: an LED frame is a few microseconds, far
+// under one step interval, and only happens once per LED_STEP_TICK_MS.
+#define LED_STEP_TICK_MS  20
+static unsigned long lastLedTick = 0;
+
 static void stepMotor() {
     digitalWrite(PIN_MOTOR_STEP, HIGH);
     delayMicroseconds(2);
     digitalWrite(PIN_MOTOR_STEP, LOW);
+
+    unsigned long now = millis();
+    if (now - lastLedTick >= LED_STEP_TICK_MS) {
+        lastLedTick = now;
+        ledTick();
+    }
 }
 
 // ============================================================

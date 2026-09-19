@@ -1,5 +1,6 @@
 #include "ota.h"
 #include "config.h"
+#include "led.h"
 
 #include <HTTPClient.h>
 #include <Update.h>
@@ -312,8 +313,15 @@ bool otaPerformUpdate(const char* binaryUrl, uint32_t expectedSize,
     uint32_t written = 0;
     unsigned long lastProgress = 0;
     unsigned long lastData = millis();
+    unsigned long lastLed = 0;
 
     while (written < (uint32_t)contentLength) {
+        // Keep the red/green OTA pattern alternating during the download
+        if (millis() - lastLed >= 20) {
+            lastLed = millis();
+            ledTick();
+        }
+
         int available = stream->available();
         if (available <= 0) {
             if (!stream->connected()) break;

@@ -1289,6 +1289,7 @@ static void handleOtaStart() {
     }
 
     Serial.printf("[OTA] Update failed: %s\n", err);
+    ledSetOtaOverride(false);
     phoneOtaBusy = false;
     broadcastOtaJSON("err", err[0] ? err : "Update failed");
 }

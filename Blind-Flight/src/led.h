@@ -47,9 +47,10 @@ void ledSetState(LedState state);
 
 LedState ledGetState();
 
-// Drive one animation frame without state logic. Call from inside
-// blocking loops (homing, delayWithAudio, OTA download) to keep
-// the LED animated while the main loop is blocked.
+// Resolve the effective state and drive one animation frame. Call
+// from inside blocking loops (homing, delayWithAudio, OTA download)
+// so the LED follows state changes while the main loop is blocked.
+// The motor step pulse calls it every LED_STEP_TICK_MS on its own.
 void ledTick();
 
 // OTA override — call before/after a firmware update to force
